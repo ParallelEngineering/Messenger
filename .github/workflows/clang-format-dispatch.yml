@@ -1,0 +1,34 @@
+# This workflow should only be run by administrators
+
+name: ClangFormat correction
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ClangFormat:
+    name: ClangFormat correction
+    runs-on: ubuntu-22.04
+
+    # Give the default GITHUB_TOKEN write permission to commit and push the changed files back to the repository.
+    permissions:
+      contents: write
+
+    steps:
+      # Clone Repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Format code
+        #run: clang-format -i **/*.cpp
+        run: find . -type f \( -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -exec clang-format -i {} \;
+
+      # Commit all changed files back to the repository
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Apply Clang formatting'
+          create_branch: false

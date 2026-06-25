@@ -1,0 +1,110 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # JOB 1: Build and test matrix
+  # Runs on PRs and pushes to main across OS's
+  build-and-test:
+    name: Build & Test (${{ matrix.config.name }} - ${{ matrix.build-configuration }})
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++" }
+          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++" }
+          - { name: "MacOS clang", os: macos-latest, cc: "clang", cxx: "clang++" }
+        build-configuration: [ Debug, Release ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if ! command -v ninja >/dev/null 2>&1; then
+            brew install ninja
+          fi
+
+
+      - name: Install Ninja (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ninja -y
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+
+      - name: Build Project
+        run: cmake --build build --config ${{ matrix.build-configuration }}
+
+      - name: Run Catch2 Unit Tests
+        # Runs the unit tests you specified
+        run: ctest --test-dir build -C ${{ matrix.build-configuration }} --output-on-failure
+
+      # We only package and upload 'Release' builds to save storage and time
+      - name: Compress Release Build Directory
+        if: matrix.build-configuration == 'Release'
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: 'zip'
+          path: 'build'
+          filename: '${{ matrix.config.os }}-build.zip'
+
+      - name: Upload Artifacts for Release
+        if: matrix.build-configuration == 'Release'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.config.os }}-build
+          path: ${{ matrix.config.os }}-build.zip
+          retention-days: 1
+
+
+  # JOB 2: Create Pre-Release
+  # Runs only on pushes to main, after tests pass
+  release:
+    name: Create Pre-Release
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Download all OS Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: ./release-artifacts
+          merge-multiple: true # Puts the Mac, Win, and Linux zip files in the same folder
+
+      - name: Generate Tag & Publish Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create naming convention
+          DATE=$(date +'%d_%m_%Y')
+          SHORT_SHA=${GITHUB_SHA::8}
+          TAG_NAME="dev-${SHORT_SHA}-${DATE}"
+          
+          # Create Pre-Release and attach all downloaded .zip files using modern GitHub CLI
+          gh release create "$TAG_NAME" ./release-artifacts/*.zip \
+            --title "Development Build $TAG_NAME" \
+            --prerelease \
+            --generate-notes

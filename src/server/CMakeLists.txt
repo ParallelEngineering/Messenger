@@ -1,1 +1,1 @@
-add_executable(messenger_server server.cpp)
+add_executable(Messenger-Server server.cpp)

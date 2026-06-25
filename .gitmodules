@@ -1,0 +1,3 @@
+[submodule "lib/RSA"]
+	path = lib/RSA
+	url = https://github.com/ParallelEngineering/RSA.git

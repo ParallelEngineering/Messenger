@@ -6,6 +6,7 @@
 class server {
 public:
     static server& getInstance();
+    ~server();
 
     server(const server&) = delete;
     server& operator=(const server&) = delete;

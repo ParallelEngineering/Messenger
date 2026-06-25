@@ -6,6 +6,7 @@
 class client {
 public:
     static client& getInstance();
+    ~client();
 
     client(const client&) = delete;
     client& operator=(const client&) = delete;

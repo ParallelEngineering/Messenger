@@ -7,6 +7,8 @@ client& client::getInstance() {
 
 client::client() = default;
 
+client::~client() = default;
+
 int main() {
     auto& clientInstance = client::getInstance();
     (void)clientInstance;

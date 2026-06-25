@@ -1,6 +1,6 @@
 #include "server.h"
 
-#include <cstdio>
+#include <iostream>
 
 server& server::getInstance() {
     static server instance;
@@ -8,7 +8,11 @@ server& server::getInstance() {
 }
 
 server::server() {
-    std::printf("Starting Messenger Server");
+    std::cout << "Starting Messenger Server ...\n";
+}
+
+server::~server() {
+    std::cout << "Stopping Messenger Server ...\n";
 }
 
 int main() {

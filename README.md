@@ -8,6 +8,25 @@ The repository contains two applications: `Messenger-Client` and `Messenger-Serv
 
 Both applications use a singleton through `getInstance()`. The project is built with CMake and C++20, with the RSA library included as a submodule.
 
+## Dependencies
+
+```mermaid
+flowchart TD
+    Client["Messenger-Client"]
+    Server["Messenger-Server"]
+    RSA["RSA\nEncryption"]
+    QtGUI["Qt Quick / QML\nGUI"]
+    QtNetwork["Qt Network\nNetworking"]
+
+    Client --> QtGUI
+    Client --> QtNetwork
+    Server --> QtNetwork
+    Client --> RSA
+    Server --> RSA
+```
+
+The application depends on the RSA library for encryption, Qt Quick/QML for the graphical client, and Qt Network for networking functionality.
+
 ## Setup
 
 > [!NOTE]

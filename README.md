@@ -14,9 +14,9 @@ Both applications use a singleton through `getInstance()`. The project is built 
 flowchart TD
     Client["Messenger-Client"]
     Server["Messenger-Server"]
-    RSA["RSA\nEncryption"]
-    QtGUI["Qt Quick / QML\nGUI"]
-    QtNetwork["Qt Network\nNetworking"]
+    RSA["RSA"]
+    QtGUI["Qt QML"]
+    QtNetwork["Qt Network"]
 
     Client --> QtGUI
     Client --> QtNetwork

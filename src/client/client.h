@@ -7,7 +7,7 @@ class QGuiApplication;
 class QQmlApplicationEngine;
 
 class client {
-public:
+   public:
     static client& getInstance();
     ~client();
 
@@ -18,12 +18,10 @@ public:
     client(client&&) = delete;
     client& operator=(client&&) = delete;
 
-private:
+   private:
     client();
 
     std::unique_ptr<QQmlApplicationEngine> engine_;
 };
 
-
-
-#endif //MESSENGER_CLIENT_H
+#endif  // MESSENGER_CLIENT_H

@@ -23,6 +23,10 @@ flowchart TD
     Server --> QtNetwork
     Client --> RSA
     Server --> RSA
+
+    click QtGUI "https://doc.qt.io/qt-6/qtquick-index.html" "Qt Quick/QML documentation"
+    click QtNetwork "https://doc.qt.io/qt-6/qtnetwork-index.html" "Qt Network documentation"
+    click RSA "https://github.com/ParallelEngineering/RSA"
 ```
 
 The application depends on the RSA library for encryption, Qt Quick/QML for the graphical client, and Qt Network for networking functionality.

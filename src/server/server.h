@@ -1,10 +1,8 @@
 #ifndef MESSENGER_SERVER_H
 #define MESSENGER_SERVER_H
 
-
-
 class server {
-public:
+   public:
     static server& getInstance();
     ~server();
 
@@ -13,10 +11,8 @@ public:
     server(server&&) = delete;
     server& operator=(server&&) = delete;
 
-private:
+   private:
     server();
 };
 
-
-
-#endif //MESSENGER_SERVER_H
+#endif  // MESSENGER_SERVER_H

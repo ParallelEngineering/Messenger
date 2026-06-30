@@ -1,4 +1,4 @@
-find_package(Qt6 COMPONENTS Quick Qml REQUIRED)
+find_package(Qt6 COMPONENTS Quick Qml Network REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -24,4 +24,5 @@ target_link_libraries(Messenger-Client
         PRIVATE
             Qt6::Quick
             Qt6::Qml
+            Qt6::Network
 )

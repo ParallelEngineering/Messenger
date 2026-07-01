@@ -50,6 +50,10 @@ jobs:
           arch: ${{ matrix.config.qt-arch }}
           archives: 'qtbase qtdeclarative'
 
+      - name: Expose Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: echo "LD_LIBRARY_PATH=${QT_ROOT_DIR}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
       - name: Install Qt (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2

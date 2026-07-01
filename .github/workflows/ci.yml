@@ -18,8 +18,9 @@ jobs:
         config:
           - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++", qt-version: "", qt-arch: "", cmake-extra: "" }
           - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++", qt-version: "6.5.3", qt-arch: "gcc_64", cmake-extra: "" }
-          # macOS 26 is not supported here because AGL.framework is no longer available
+          # Qt 6.5.3 stays on macOS 15 because AGL.framework is no longer available on macOS 26.
           - { name: "MacOS clang", os: macos-15-intel, cc: "clang", cxx: "clang++", qt-version: "6.5.3", qt-arch: "clang_64", cmake-extra: "" }
+          - { name: "MacOS 26 clang", os: macos-26, cc: "clang", cxx: "clang++", qt-version: "6.9.2", qt-arch: "clang_64", cmake-extra: "-DCMAKE_OSX_ARCHITECTURES=arm64" }
         build-configuration: [ Debug, Release ]
 
     steps:

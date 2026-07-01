@@ -16,9 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++", qt-arch: "" }
-          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++", qt-arch: "gcc_64" }
-          - { name: "MacOS clang", os: macos-latest, cc: "clang", cxx: "clang++", qt-arch: "clang_64" }
+          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++", qt-version: "", qt-arch: "", cmake-extra: "" }
+          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++", qt-version: "6.5.3", qt-arch: "gcc_64", cmake-extra: "" }
+          - { name: "MacOS clang", os: macos-26, cc: "clang", cxx: "clang++", qt-version: "6.8.2", qt-arch: "clang_64", cmake-extra: "-DCMAKE_OSX_ARCHITECTURES=arm64" }
         build-configuration: [ Debug, Release ]
 
     steps:
@@ -45,7 +45,7 @@ jobs:
         if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.5.3'
+          version: ${{ matrix.config.qt-version }}
           target: 'desktop'
           arch: ${{ matrix.config.qt-arch }}
 
@@ -71,7 +71,7 @@ jobs:
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}" ${{ matrix.config.cmake-extra }}
 
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'

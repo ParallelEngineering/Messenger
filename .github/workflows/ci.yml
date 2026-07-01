@@ -45,14 +45,15 @@ jobs:
         if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.5.3'
+          version: '6.8.*'
           target: 'desktop'
           arch: ${{ matrix.config.qt-arch }}
-          archives: 'qtbase qtdeclarative'
 
-      - name: Expose Qt runtime libraries (Linux)
+      - name: Verify Qt tool dependencies (Linux)
         if: runner.os == 'Linux'
-        run: echo "LD_LIBRARY_PATH=${QT_ROOT_DIR}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        run: |
+          ldd "$QT_ROOT_DIR/libexec/qmlimportscanner"
+          ! ldd "$QT_ROOT_DIR/libexec/qmlimportscanner" | grep "not found"
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows'

@@ -16,22 +16,22 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++" }
-          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++" }
-          - { name: "MacOS clang", os: macos-latest, cc: "clang", cxx: "clang++" }
+          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++", qt-version: "", qt-arch: "", cmake-extra: "" }
+          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++", qt-version: "6.5.3", qt-arch: "gcc_64", cmake-extra: "" }
+          - { name: "MacOS 26 clang", os: macos-26, cc: "clang", cxx: "clang++", qt-version: "6.9.2", qt-arch: "clang_64", cmake-extra: "-DCMAKE_OSX_ARCHITECTURES=arm64" }
         build-configuration: [ Debug, Release ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          submodules: true
+          submodules: recursive
 
       - name: Install Ninja (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build libgl1-mesa-dev
 
       - name: Install Ninja (macOS)
         if: runner.os == 'macOS'
@@ -41,20 +41,61 @@ jobs:
           fi
 
 
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: choco install ninja -y
+      - name: Install Qt (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.config.qt-version }}
+          target: 'desktop'
+          arch: ${{ matrix.config.qt-arch }}
 
-      - name: Configure CMake
+      - name: Verify Qt tool dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }}
+          ldd "$QT_ROOT_DIR/libexec/qmlimportscanner"
+          ! ldd "$QT_ROOT_DIR/libexec/qmlimportscanner" | grep "not found"
 
-      - name: Build Project
+      - name: Install Qt (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-declarative
+
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}" ${{ matrix.config.cmake-extra }}
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_PREFIX_PATH=/mingw64
+
+      - name: Build Project (Linux/macOS)
+        if: runner.os != 'Windows'
         run: cmake --build build --config ${{ matrix.build-configuration }}
 
-      - name: Run Catch2 Unit Tests
+      - name: Build Project (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake --build build --config ${{ matrix.build-configuration }}
+
+      - name: Run Catch2 Unit Tests (Linux/macOS)
+        if: runner.os != 'Windows'
         # Runs the unit tests you specified
+        run: ctest --test-dir build -C ${{ matrix.build-configuration }} --output-on-failure
+
+      - name: Run Catch2 Unit Tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: ctest --test-dir build -C ${{ matrix.build-configuration }} --output-on-failure
 
       # We only package and upload 'Release' builds to save storage and time

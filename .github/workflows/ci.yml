@@ -45,7 +45,7 @@ jobs:
         if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.2'
+          version: '6.5.3'
           target: 'desktop'
           arch: ${{ matrix.config.qt-arch }}
 

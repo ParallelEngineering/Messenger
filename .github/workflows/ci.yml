@@ -12,7 +12,7 @@ env:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.config.name }} (${{ matrix.build-configuration }})
+    name: ${{ matrix.config.name }} (${{ matrix.build_configuration }})
     runs-on: ${{ matrix.config.os }}
 
     strategy:
@@ -24,20 +24,23 @@ jobs:
             cc: gcc
             cxx: g++
             shell: "msys2 {0}"
-            qt-arch: ""
+            qt_arch: ""
+            extra_cmake_args: ""
           - name: Ubuntu gcc
             os: ubuntu-latest
             cc: gcc
             cxx: g++
             shell: bash
-            qt-arch: gcc_64
+            qt_arch: gcc_64
+            extra_cmake_args: ""
           - name: MacOS clang
             os: macos-latest
             cc: clang
             cxx: clang++
             shell: bash
-            qt-arch: clang_64
-        build-configuration: [Debug, Release]
+            qt_arch: clang_64
+            extra_cmake_args: -DCMAKE_OSX_ARCHITECTURES=arm64
+        build_configuration: [Debug, Release]
 
     steps:
       - name: Checkout repository
@@ -64,7 +67,7 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           target: desktop
-          arch: ${{ matrix.config.qt-arch }}
+          arch: ${{ matrix.config.qt_arch }}
           archives: qtbase qtdeclarative
 
       - name: Install Qt (Windows)
@@ -89,21 +92,22 @@ jobs:
           fi
 
           cmake -B "$BUILD_DIR" -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} \
             -DCMAKE_C_COMPILER=${{ matrix.config.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} \
-            -DCMAKE_PREFIX_PATH="$qt_prefix"
+            -DCMAKE_PREFIX_PATH="$qt_prefix" \
+            ${{ matrix.config.extra_cmake_args }}
 
       - name: Build project
         shell: ${{ matrix.config.shell }}
-        run: cmake --build "$BUILD_DIR" --config ${{ matrix.build-configuration }}
+        run: cmake --build "$BUILD_DIR" --config ${{ matrix.build_configuration }}
 
       - name: Run Catch2 unit tests
         shell: ${{ matrix.config.shell }}
-        run: ctest --test-dir "$BUILD_DIR" -C ${{ matrix.build-configuration }} --output-on-failure
+        run: ctest --test-dir "$BUILD_DIR" -C ${{ matrix.build_configuration }} --output-on-failure
 
       - name: Compress release build directory
-        if: matrix.build-configuration == 'Release'
+        if: matrix.build_configuration == 'Release'
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: zip
@@ -111,7 +115,7 @@ jobs:
           filename: ${{ matrix.config.os }}-build.zip
 
       - name: Upload release artifact
-        if: matrix.build-configuration == 'Release'
+        if: matrix.build_configuration == 'Release'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.config.os }}-build

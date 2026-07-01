@@ -2,24 +2,42 @@ name: CI/CD Pipeline
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
   push:
-    branches: [ "main" ]
+    branches: [main]
+
+env:
+  BUILD_DIR: build
+  QT_VERSION: "6.5.3"
 
 jobs:
-  # JOB 1: Build and test matrix
-  # Runs on PRs and pushes to main across OS's
   build-and-test:
-    name: Build & Test (${{ matrix.config.name }} - ${{ matrix.build-configuration }})
+    name: ${{ matrix.config.name }} (${{ matrix.build-configuration }})
     runs-on: ${{ matrix.config.os }}
+
     strategy:
       fail-fast: false
       matrix:
         config:
-          - { name: "Windows gcc", os: windows-latest, cc: "gcc", cxx: "g++", qt-arch: "" }
-          - { name: "Ubuntu gcc", os: ubuntu-latest, cc: "gcc", cxx: "g++", qt-arch: "gcc_64" }
-          - { name: "MacOS clang", os: macos-latest, cc: "clang", cxx: "clang++", qt-arch: "clang_64" }
-        build-configuration: [ Debug, Release ]
+          - name: Windows gcc
+            os: windows-latest
+            cc: gcc
+            cxx: g++
+            shell: "msys2 {0}"
+            qt-arch: ""
+          - name: Ubuntu gcc
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            shell: bash
+            qt-arch: gcc_64
+          - name: MacOS clang
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            shell: bash
+            qt-arch: clang_64
+        build-configuration: [Debug, Release]
 
     steps:
       - name: Checkout repository
@@ -27,55 +45,27 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Ninja (Linux)
-        if: runner.os == 'Linux'
+      - name: Install Ninja (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libfreetype6-dev \
-            libx11-dev \
-            libx11-xcb-dev \
-            libxcb-cursor-dev \
-            libxcb-glx0-dev \
-            libxcb-icccm4-dev \
-            libxcb-image0-dev \
-            libxcb-keysyms1-dev \
-            libxcb-randr0-dev \
-            libxcb-render-util0-dev \
-            libxcb-shape0-dev \
-            libxcb-shm0-dev \
-            libxcb-sync-dev \
-            libxcb-util-dev \
-            libxcb-xfixes0-dev \
-            libxcb-xinerama0-dev \
-            libxcb-xkb-dev \
-            libxcb1-dev \
-            libxext-dev \
-            libxfixes-dev \
-            libxi-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libxrender-dev
-
-      - name: Install Ninja (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          if ! command -v ninja >/dev/null 2>&1; then
-            brew install ninja
-          fi
-
+          case "${{ runner.os }}" in
+            Linux)
+              sudo apt-get update
+              sudo apt-get install -y ninja-build
+              ;;
+            macOS)
+              command -v ninja >/dev/null 2>&1 || brew install ninja
+              ;;
+          esac
 
       - name: Install Qt (Linux/macOS)
         if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.5.3'
-          target: 'desktop'
+          version: ${{ env.QT_VERSION }}
+          target: desktop
           arch: ${{ matrix.config.qt-arch }}
-          archives: 'qtbase qtdeclarative'
+          archives: qtbase qtdeclarative
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows'
@@ -90,46 +80,37 @@ jobs:
             mingw-w64-x86_64-qt6-base
             mingw-w64-x86_64-qt6-declarative
 
-      - name: Configure CMake (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Configure CMake
+        shell: ${{ matrix.config.shell }}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=${{ matrix.config.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+          qt_prefix="$QT_ROOT_DIR"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            qt_prefix=/mingw64
+          fi
 
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_PREFIX_PATH=/mingw64
+          cmake -B "$BUILD_DIR" -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build-configuration }} \
+            -DCMAKE_C_COMPILER=${{ matrix.config.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} \
+            -DCMAKE_PREFIX_PATH="$qt_prefix"
 
-      - name: Build Project (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: cmake --build build --config ${{ matrix.build-configuration }}
+      - name: Build project
+        shell: ${{ matrix.config.shell }}
+        run: cmake --build "$BUILD_DIR" --config ${{ matrix.build-configuration }}
 
-      - name: Build Project (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: cmake --build build --config ${{ matrix.build-configuration }}
+      - name: Run Catch2 unit tests
+        shell: ${{ matrix.config.shell }}
+        run: ctest --test-dir "$BUILD_DIR" -C ${{ matrix.build-configuration }} --output-on-failure
 
-      - name: Run Catch2 Unit Tests (Linux/macOS)
-        if: runner.os != 'Windows'
-        # Runs the unit tests you specified
-        run: ctest --test-dir build -C ${{ matrix.build-configuration }} --output-on-failure
-
-      - name: Run Catch2 Unit Tests (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: ctest --test-dir build -C ${{ matrix.build-configuration }} --output-on-failure
-
-      # We only package and upload 'Release' builds to save storage and time
-      - name: Compress Release Build Directory
+      - name: Compress release build directory
         if: matrix.build-configuration == 'Release'
         uses: thedoctor0/zip-release@0.7.5
         with:
-          type: 'zip'
-          path: 'build'
-          filename: '${{ matrix.config.os }}-build.zip'
+          type: zip
+          path: ${{ env.BUILD_DIR }}
+          filename: ${{ matrix.config.os }}-build.zip
 
-      - name: Upload Artifacts for Release
+      - name: Upload release artifact
         if: matrix.build-configuration == 'Release'
         uses: actions/upload-artifact@v7
         with:
@@ -137,36 +118,33 @@ jobs:
           path: ${{ matrix.config.os }}-build.zip
           retention-days: 1
 
-
-  # JOB 2: Create Pre-Release
-  # Runs only on pushes to main, after tests pass
   release:
-    name: Create Pre-Release
+    name: Create pre-release
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
+
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download all OS Artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
           path: ./release-artifacts
-          merge-multiple: true # Puts the Mac, Win, and Linux zip files in the same folder
+          merge-multiple: true
 
-      - name: Generate Tag & Publish Release
+      - name: Generate tag and publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create naming convention
           DATE=$(date +'%d_%m_%Y')
           SHORT_SHA=${GITHUB_SHA::8}
           TAG_NAME="dev-${SHORT_SHA}-${DATE}"
-          
-          # Create Pre-Release and attach all downloaded .zip files using modern GitHub CLI
+
           gh release create "$TAG_NAME" ./release-artifacts/*.zip \
             --title "Development Build $TAG_NAME" \
             --prerelease \

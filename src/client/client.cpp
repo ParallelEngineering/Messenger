@@ -1,6 +1,6 @@
 #include "client.h"
 
-#include "client_network_manager.h"
+#include "network_manager.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -16,7 +16,7 @@ client::client() = default;
 client::~client() = default;
 
 int client::run(QGuiApplication& app) {
-    networkManager_ = std::make_unique<ClientNetworkManager>();
+    networkManager_ = std::make_unique<NetworkManager>();
     engine_ = std::make_unique<QQmlApplicationEngine>();
     engine_->rootContext()->setContextProperty("networkManager", networkManager_.get());
     engine_->loadFromModule("Messenger.Client", "Main");

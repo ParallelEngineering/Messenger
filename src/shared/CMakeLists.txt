@@ -1,8 +1,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Core)
 
 add_library(Messenger-Shared STATIC
-        message_envelope.cpp
-        message_envelope.h
+        message.cpp
+        message.h
 )
 
 target_link_libraries(Messenger-Shared

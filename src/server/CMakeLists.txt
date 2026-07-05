@@ -3,8 +3,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Network)
 set(CMAKE_AUTOMOC ON)
 
 add_executable(Messenger-Server
-        client_session.cpp
-        client_session.h
+        session.cpp
+        session.h
         server.cpp
         server.h
 )

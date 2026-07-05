@@ -5,10 +5,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_executable(Messenger-Client
         WIN32
         MACOSX_BUNDLE
-        client_network_manager.cpp
-        client_network_manager.h
+        network_manager.cpp
         client.cpp
-        client.h
 )
 
 set_target_properties(Messenger-Client PROPERTIES

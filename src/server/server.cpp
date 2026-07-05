@@ -1,6 +1,6 @@
 #include "server.h"
 
-#include "client_session.h"
+#include "session.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -12,7 +12,7 @@
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DefaultPort;
-using messenger::protocol::MessageEnvelope;
+using messenger::protocol::Message;
 using messenger::protocol::MessageType;
 
 server& server::getInstance() {
@@ -45,11 +45,11 @@ bool server::listen(const QHostAddress& address, quint16 port) {
 void server::handleNewConnection() {
     while (tcpServer_.hasPendingConnections()) {
         auto* socket = tcpServer_.nextPendingConnection();
-        auto* session = new ClientSession(socket, this);
+        auto* session = new Session(socket, this);
         sessions_.insert(session);
 
-        connect(session, &ClientSession::messageReceived, this, &server::handleMessageReceived);
-        connect(session, &ClientSession::disconnected, this, &server::handleSessionDisconnected);
+        connect(session, &Session::messageReceived, this, &server::handleMessageReceived);
+        connect(session, &Session::disconnected, this, &server::handleSessionDisconnected);
     }
 }
 
@@ -57,7 +57,7 @@ void server::handleAcceptError(QAbstractSocket::SocketError socketError) {
     qWarning() << "Server accept error:" << socketError << tcpServer_.errorString();
 }
 
-void server::handleMessageReceived(const MessageEnvelope& message, ClientSession* session) {
+void server::handleMessageReceived(const Message& message, Session* session) {
     if (message.protocolVersion != CurrentProtocolVersion) {
         qWarning() << "Ignoring message with unsupported protocol version" << message.protocolVersion;
         return;
@@ -74,7 +74,7 @@ void server::handleMessageReceived(const MessageEnvelope& message, ClientSession
     Q_UNUSED(session)
 }
 
-void server::handleSessionDisconnected(ClientSession* session) {
+void server::handleSessionDisconnected(Session* session) {
     sessions_.remove(session);
     session->deleteLater();
 }

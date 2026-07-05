@@ -1,7 +1,10 @@
 #include "client.h"
 
+#include "client_network_manager.h"
+
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 
 client& client::getInstance() {
     static client instance;
@@ -13,16 +16,20 @@ client::client() = default;
 client::~client() = default;
 
 int client::run(QGuiApplication& app) {
+    networkManager_ = std::make_unique<ClientNetworkManager>();
     engine_ = std::make_unique<QQmlApplicationEngine>();
+    engine_->rootContext()->setContextProperty("networkManager", networkManager_.get());
     engine_->loadFromModule("Messenger.Client", "Main");
 
     if (engine_->rootObjects().isEmpty()) {
         engine_.reset();
+        networkManager_.reset();
         return -1;
     }
 
     const auto exitCode = app.exec();
     engine_.reset();
+    networkManager_.reset();
 
     return exitCode;
 }

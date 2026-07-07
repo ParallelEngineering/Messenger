@@ -25,6 +25,7 @@ class NetworkManager final : public QObject {
     Q_INVOKABLE void sendChatMessage(const QString& sender, const QString& recipient, const QString& text);
 
    signals:
+    // These methods are implemented in qt
     void connectedChanged();
     void statusTextChanged();
     void messageReceived(const QString& sender, const QString& recipient, const QString& text);

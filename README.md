@@ -2,6 +2,19 @@
 
 Messenger is a cross-platform client-server messenger application based on the RSA algorithm. The project is still in an early stage and currently provides the foundation for the client and server.
 
+## Functionality
+
+The project currently implements the core flow for a TCP-based group chat:
+
+- **Client connection:** enter a server host, connect automatically to the server, disconnect again when terminating the program, and see the current connection status in the UI.
+- **Group chat login:** each server represents one group chat; users join that group chat by signing in with a name and password.
+- **Message sending:** compose text messages and send them to the connected server.
+- **Message receiving:** display incoming messages in the client window as they arrive from the server.
+- **Group chat forwarding:** the server keeps track of the clients connected to its group chat and broadcasts chat messages to every active session.
+- **Chat history:** the server stores the group chat history and sends all previous messages to newly connected clients.
+- **Protocol validation:** client and server exchange structured messages and reject unsupported protocol versions.
+- **Error handling:** connection errors and invalid client-side input are surfaced through the status text and message log.
+
 ## Architecture
 
 The repository contains two applications: `Messenger-Client` and `Messenger-Server`. The client is built with Qt/QML; the server is a terminal program.

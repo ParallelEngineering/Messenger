@@ -1,6 +1,6 @@
 # Messenger
 
-Messenger is a cross-platform client-server messenger application based on the RSA algorithm. The project is still in an early stage and currently provides the foundation for the client and server.
+Messenger is a simple chat program with a client and a server. Users can connect to a server, send messages, receive messages, and see the previous chat history. The messenger is intentionally kept simple: there is only one chat on each server, because the project is mainly a learning project focused on networking and encryption.
 
 ## Functionality
 

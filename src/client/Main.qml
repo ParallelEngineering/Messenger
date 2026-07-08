@@ -232,41 +232,6 @@ Window {
             }
         }
 
-        Row {
-            width: parent.width
-            spacing: 12
-
-            Column {
-                width: Math.max(120, (parent.width - parent.spacing) / 2)
-                spacing: 8
-
-                FieldLabel {
-                    text: qsTr("Absender")
-                }
-
-                TextInputBox {
-                    id: senderInput
-                    width: parent.width
-                    text: "client"
-                }
-            }
-
-            Column {
-                width: Math.max(120, (parent.width - parent.spacing) / 2)
-                spacing: 8
-
-                FieldLabel {
-                    text: qsTr("Empfaenger")
-                }
-
-                TextInputBox {
-                    id: recipientInput
-                    width: parent.width
-                    text: "server"
-                }
-            }
-        }
-
         Rectangle {
             width: parent.width
             height: Math.max(120, parent.height - y - composeRow.height - parent.spacing)
@@ -312,7 +277,7 @@ Window {
                 width: Math.max(120, composeRow.width - sendButton.width - composeRow.spacing)
                 onAccepted: {
                     if (networkManager.connected && messageInput.text.length > 0) {
-                        networkManager.sendChatMessage(senderInput.text, recipientInput.text, messageInput.text)
+                        networkManager.sendChatMessage(messageInput.text)
                         messageInput.text = ""
                     }
                 }
@@ -324,7 +289,7 @@ Window {
                 text: qsTr("Senden")
                 enabledState: networkManager.connected && messageInput.text.length > 0
                 onClicked: {
-                    networkManager.sendChatMessage(senderInput.text, recipientInput.text, messageInput.text)
+                    networkManager.sendChatMessage(messageInput.text)
                     messageInput.text = ""
                 }
             }
@@ -334,8 +299,14 @@ Window {
     Connections {
         target: networkManager
 
-        function onMessageReceived(sender, recipient, text) {
-            receivedMessages += sender + " -> " + recipient + ": " + text + "\n"
+        function onConnectedChanged() {
+            if (!networkManager.connected) {
+                receivedMessages = ""
+            }
+        }
+
+        function onMessageReceived(text) {
+            receivedMessages += text + "\n"
             Qt.callLater(function() {
                 messageFlickable.contentY = Math.max(0, messageFlickable.contentHeight - messageFlickable.height)
             })

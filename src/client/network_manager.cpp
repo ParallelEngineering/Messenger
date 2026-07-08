@@ -65,7 +65,7 @@ void NetworkManager::disconnectFromServer() {
     socket_.disconnectFromHost();
 }
 
-void NetworkManager::sendChatMessage(const QString& sender, const QString& recipient, const QString& text) {
+void NetworkManager::sendChatMessage(const QString& text) {
     if (!connected()) {
         const auto message = tr("Not connected to a server.");
         setStatusText(message);
@@ -75,8 +75,6 @@ void NetworkManager::sendChatMessage(const QString& sender, const QString& recip
 
     Message message;
     message.messageType = static_cast<quint32>(MessageType::ChatMessage);
-    message.sender = sender;
-    message.recipient = recipient;
     message.text = text;
     message.timestamp = QDateTime::currentDateTimeUtc();
 
@@ -125,7 +123,7 @@ void NetworkManager::readAvailable() {
             return;
         }
 
-        emit messageReceived(message.sender, message.recipient, message.text);
+        emit messageReceived(message.text);
     }
 }
 

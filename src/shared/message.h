@@ -22,8 +22,6 @@ enum class MessageType : quint32 {
 struct Message {
     quint32 protocolVersion = CurrentProtocolVersion;
     quint32 messageType = static_cast<quint32>(MessageType::ChatMessage);
-    QString sender;
-    QString recipient;
     QString text;
     QDateTime timestamp = QDateTime::currentDateTimeUtc();
 };

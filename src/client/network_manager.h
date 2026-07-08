@@ -23,13 +23,13 @@ class NetworkManager final : public QObject {
     // Methode that can be called from QML
     Q_INVOKABLE void connectToServer(const QString& host, quint16 port);
     Q_INVOKABLE void disconnectFromServer();
-    Q_INVOKABLE void sendChatMessage(const QString& sender, const QString& recipient, const QString& text);
+    Q_INVOKABLE void sendChatMessage(const QString& text);
 
    signals:
     // These methods are implemented in qt
     void connectedChanged();
     void statusTextChanged();
-    void messageReceived(const QString& sender, const QString& recipient, const QString& text);
+    void messageReceived(const QString& text);
     void connectionError(const QString& message);
 
    private slots:

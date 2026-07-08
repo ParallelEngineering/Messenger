@@ -63,7 +63,7 @@ void server::handleMessageReceived(const Message& message, Session* session) {
         return;
     }
 
-    qInfo() << "Message from" << message.sender << "to" << message.recipient << ":" << message.text;
+    qInfo() << "Message:" << message.text;
 
     if (message.messageType == static_cast<quint32>(MessageType::ChatMessage)) {
         for (auto* connectedSession : std::as_const(sessions_)) {

@@ -15,10 +15,13 @@ Window {
     property string receivedMessages: ""
 
     function connectWithInput() {
-        if (hostInput.text.trim().length === 0 || !portInput.acceptableInput) {
+        if (userNameInput.text.trim().length === 0
+                || hostInput.text.trim().length === 0
+                || !portInput.acceptableInput) {
             return
         }
 
+        networkManager.userName = userNameInput.text
         networkManager.connectToServer(hostInput.text, Number(portInput.text))
     }
 
@@ -111,6 +114,23 @@ Window {
                 spacing: 8
 
                 FieldLabel {
+                    text: qsTr("Name")
+                }
+
+                TextInputBox {
+                    id: userNameInput
+                    width: parent.width
+                    text: networkManager.userName
+                    onAccepted: connectWithInput()
+                    onTextChanged: networkManager.userName = text
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+
+                FieldLabel {
                     text: qsTr("Server IP")
                 }
 
@@ -145,7 +165,9 @@ Window {
             ActionButton {
                 width: parent.width
                 text: qsTr("Verbinden")
-                enabledState: hostInput.text.trim().length > 0 && portInput.acceptableInput
+                enabledState: userNameInput.text.trim().length > 0
+                              && hostInput.text.trim().length > 0
+                              && portInput.acceptableInput
                 onClicked: connectWithInput()
             }
         }
@@ -305,8 +327,8 @@ Window {
             }
         }
 
-        function onMessageReceived(text) {
-            receivedMessages += text + "\n"
+        function onMessageReceived(senderName, text, sentAt) {
+            receivedMessages += "[" + sentAt + "] " + senderName + ": " + text + "\n"
             Qt.callLater(function() {
                 messageFlickable.contentY = Math.max(0, messageFlickable.contentHeight - messageFlickable.height)
             })

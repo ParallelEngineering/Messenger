@@ -2,6 +2,7 @@
 
 #include <QAbstractSocket>
 #include <QDateTime>
+#include <QtGlobal>
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DataStreamVersion;
@@ -11,7 +12,10 @@ using messenger::protocol::MessageType;
 using messenger::protocol::ReadBufferSize;
 
 NetworkManager::NetworkManager(QObject* parent)
-    : QObject(parent), stream_(&socket_), statusText_(tr("Disconnected")) {
+    : QObject(parent),
+      stream_(&socket_),
+      statusText_(tr("Disconnected")),
+      userName_(QStringLiteral("anonymous")) {
     socket_.setReadBufferSize(ReadBufferSize);
     stream_.setVersion(DataStreamVersion);
 
@@ -29,8 +33,22 @@ QString NetworkManager::statusText() const {
     return statusText_;
 }
 
+QString NetworkManager::userName() const {
+    return userName_;
+}
+
 int NetworkManager::defaultPort() const {
     return DefaultPort;
+}
+
+void NetworkManager::setUserName(const QString& userName) {
+    const auto trimmedUserName = userName.trimmed();
+    if (userName_ == trimmedUserName) {
+        return;
+    }
+
+    userName_ = trimmedUserName;
+    emit userNameChanged();
 }
 
 void NetworkManager::connectToServer(const QString& host, quint16 port) {
@@ -73,8 +91,17 @@ void NetworkManager::sendChatMessage(const QString& text) {
         return;
     }
 
+    const auto senderName = userName_.trimmed();
+    if (senderName.isEmpty()) {
+        const auto message = tr("User name must not be empty.");
+        setStatusText(message);
+        emit connectionError(message);
+        return;
+    }
+
     Message message;
     message.messageType = static_cast<quint32>(MessageType::ChatMessage);
+    message.senderName = senderName;
     message.text = text;
     message.timestamp = QDateTime::currentDateTimeUtc();
 
@@ -123,7 +150,9 @@ void NetworkManager::readAvailable() {
             return;
         }
 
-        emit messageReceived(message.text);
+        emit messageReceived(message.senderName,
+                             message.text,
+                             message.timestamp.toLocalTime().toString(QStringLiteral("HH:mm")));
     }
 }
 

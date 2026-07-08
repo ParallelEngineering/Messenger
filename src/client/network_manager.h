@@ -11,6 +11,7 @@ class NetworkManager final : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+    Q_PROPERTY(QString userName READ userName WRITE setUserName NOTIFY userNameChanged)
     Q_PROPERTY(int defaultPort READ defaultPort CONSTANT)
 
    public:
@@ -18,7 +19,9 @@ class NetworkManager final : public QObject {
 
     [[nodiscard]] bool connected() const;
     [[nodiscard]] QString statusText() const;
+    [[nodiscard]] QString userName() const;
     [[nodiscard]] int defaultPort() const;
+    void setUserName(const QString& userName);
 
     // Methode that can be called from QML
     Q_INVOKABLE void connectToServer(const QString& host, quint16 port);
@@ -29,7 +32,8 @@ class NetworkManager final : public QObject {
     // These methods are implemented in qt
     void connectedChanged();
     void statusTextChanged();
-    void messageReceived(const QString& text);
+    void userNameChanged();
+    void messageReceived(const QString& senderName, const QString& text, const QString& sentAt);
     void connectionError(const QString& message);
 
    private slots:
@@ -45,6 +49,7 @@ class NetworkManager final : public QObject {
     QTcpSocket socket_;
     QDataStream stream_;
     QString statusText_;
+    QString userName_;
 };
 
 #endif  // MESSENGER_NETWORK_MANAGER_H

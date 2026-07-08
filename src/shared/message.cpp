@@ -5,6 +5,7 @@ namespace messenger::protocol {
 QDataStream& operator<<(QDataStream& out, const Message& message) {
     out << message.protocolVersion;
     out << message.messageType;
+    out << message.senderName;
     out << message.text;
     out << message.timestamp;
 
@@ -14,6 +15,7 @@ QDataStream& operator<<(QDataStream& out, const Message& message) {
 QDataStream& operator>>(QDataStream& in, Message& message) {
     in >> message.protocolVersion;
     in >> message.messageType;
+    in >> message.senderName;
     in >> message.text;
     in >> message.timestamp;
 

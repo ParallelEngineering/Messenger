@@ -105,6 +105,40 @@ Window {
         }
     }
 
+    component QuietButton: Rectangle {
+        id: quietButton
+
+        property alias text: label.text
+        property bool enabledState: true
+        property color normalColor: "#ffffff"
+        property color hoverColor: "#f7f8fa"
+        property color disabledColor: "#d7dde5"
+        property color borderColor: "#c8d0d9"
+        property color textColor: "#1f2933"
+        signal clicked()
+
+        height: 44
+        radius: 6
+        color: enabledState ? (quietButtonMouseArea.containsMouse ? hoverColor : normalColor) : disabledColor
+        border.color: enabledState ? borderColor : "#c8d0d9"
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            color: enabledState ? quietButton.textColor : "#43515f"
+            font.pixelSize: 15
+        }
+
+        MouseArea {
+            id: quietButtonMouseArea
+            anchors.fill: parent
+            enabled: quietButton.enabledState
+            hoverEnabled: true
+            cursorShape: quietButton.enabledState ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: quietButton.clicked()
+        }
+    }
+
     component IconButton: Rectangle {
         id: iconButton
 
@@ -240,19 +274,86 @@ Window {
                         currentIndex: -1
 
                         background: Rectangle {
-                            radius: 6
+                            radius: 8
                             color: "#ffffff"
                             border.color: keyComboBox.activeFocus ? "#205493" : "#c8d0d9"
                         }
 
                         contentItem: Text {
                             leftPadding: 11
-                            rightPadding: 28
+                            rightPadding: 36
                             text: keyComboBox.displayText
                             color: "#1f2933"
                             font.pixelSize: 15
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
+                        }
+
+                        indicator: Canvas {
+                            x: keyComboBox.width - width - 12
+                            y: (keyComboBox.height - height) / 2
+                            width: 16
+                            height: 16
+
+                            onPaint: {
+                                const context = getContext("2d")
+                                context.clearRect(0, 0, width, height)
+                                context.strokeStyle = "#43515f"
+                                context.lineWidth = 2
+                                context.lineCap = "round"
+                                context.lineJoin = "round"
+                                context.beginPath()
+                                context.moveTo(4, 6)
+                                context.lineTo(8, 10)
+                                context.lineTo(12, 6)
+                                context.stroke()
+                            }
+                        }
+
+                        delegate: ItemDelegate {
+                            required property string modelData
+                            required property int index
+
+                            width: keyComboBox.width - 8
+                            height: 40
+                            highlighted: keyComboBox.highlightedIndex === index
+
+                            contentItem: Text {
+                                text: modelData
+                                color: "#1f2933"
+                                font.pixelSize: 15
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+
+                            background: Rectangle {
+                                radius: 6
+                                color: parent.highlighted ? "#eef4fb" : "#ffffff"
+                            }
+                        }
+
+                        popup: Popup {
+                            y: keyComboBox.height + 4
+                            width: keyComboBox.width
+                            implicitHeight: Math.min(contentItem.implicitHeight + 8, 220)
+                            padding: 4
+
+                            background: Rectangle {
+                                radius: 8
+                                color: "#ffffff"
+                                border.color: "#c8d0d9"
+                            }
+
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: keyComboBox.popup.visible ? keyComboBox.delegateModel : null
+                                currentIndex: keyComboBox.highlightedIndex
+
+                                ScrollBar.vertical: ScrollBar {
+                                    policy: ScrollBar.AsNeeded
+                                }
+                            }
                         }
 
                         onActivated: function(index) {
@@ -478,8 +579,8 @@ Window {
                             width: keysListView.width
                             height: 48
                             radius: 6
-                            color: modelData === connectionStore.selectedKeyName ? "#eef4fb" : "#f7f8fa"
-                            border.color: modelData === connectionStore.selectedKeyName ? "#8bb4dc" : "#d7dde5"
+                            color: "#f7f8fa"
+                            border.color: "#d7dde5"
 
                             Text {
                                 anchors {
@@ -526,17 +627,6 @@ Window {
                                         deleteKeyConfirmationPopup.open()
                                     }
                                 }
-                            }
-
-                            MouseArea {
-                                anchors {
-                                    left: parent.left
-                                    right: deleteKeyButton.left
-                                    top: parent.top
-                                    bottom: parent.bottom
-                                }
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: connectionStore.selectedKeyName = modelData
                             }
                         }
 
@@ -710,17 +800,23 @@ Window {
                     width: parent.width
                     spacing: 12
 
-                    ActionButton {
+                    QuietButton {
                         width: Math.max(120, (parent.width - parent.spacing) / 2)
                         text: qsTr("Abbrechen")
-                        activeColor: "#607080"
+                        normalColor: "#ffffff"
+                        hoverColor: "#f7f8fa"
+                        borderColor: "#c8d0d9"
+                        textColor: "#43515f"
                         onClicked: deleteKeyConfirmationPopup.close()
                     }
 
-                    ActionButton {
+                    QuietButton {
                         width: Math.max(120, (parent.width - parent.spacing) / 2)
                         text: qsTr("Löschen")
-                        activeColor: "#9f2f3a"
+                        normalColor: "#f3e7e8"
+                        hoverColor: "#ead8da"
+                        borderColor: "#ddb9bd"
+                        textColor: "#7a2830"
                         enabledState: pendingDeleteKeyName.length > 0
                         onClicked: {
                             if (connectionStore.deleteKeyPair(pendingDeleteKeyName)) {

@@ -34,6 +34,18 @@ void Session::sendMessage(const Message& message) {
     socket_->flush();
 }
 
+QString Session::userName() const {
+    return userName_;
+}
+
+bool Session::hasUserName() const {
+    return !userName_.isEmpty();
+}
+
+void Session::setUserName(const QString& userName) {
+    userName_ = userName.trimmed();
+}
+
 void Session::readAvailable() {
     while (socket_->bytesAvailable() > 0) {
         stream_.startTransaction();

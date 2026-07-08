@@ -15,6 +15,9 @@ class Session final : public QObject {
     explicit Session(QTcpSocket* socket, QObject* parent = nullptr);
 
     void sendMessage(const messenger::protocol::Message& message);
+    [[nodiscard]] QString userName() const;
+    [[nodiscard]] bool hasUserName() const;
+    void setUserName(const QString& userName);
 
    signals:
     void messageReceived(const messenger::protocol::Message& message, Session* session);
@@ -28,6 +31,7 @@ class Session final : public QObject {
    private:
     QTcpSocket* socket_;
     QDataStream stream_;
+    QString userName_;
 };
 
 #endif  // MESSENGER_SESSION_H

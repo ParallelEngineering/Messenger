@@ -15,6 +15,17 @@ using messenger::protocol::DefaultPort;
 using messenger::protocol::Message;
 using messenger::protocol::MessageType;
 
+namespace {
+
+bool isValidChatMessage(const Message& message) {
+    return message.messageType == static_cast<quint32>(MessageType::ChatMessage)
+           && !message.senderName.trimmed().isEmpty()
+           && !message.text.trimmed().isEmpty()
+           && message.timestamp.isValid();
+}
+
+}  // namespace
+
 server& server::getInstance() {
     static server instance;
     return instance;
@@ -80,19 +91,43 @@ void server::handleMessageReceived(const Message& message, Session* session) {
         return;
     }
 
-    qInfo() << "Message:" << message.text;
-
     if (message.messageType == static_cast<quint32>(MessageType::ChatMessage)) {
-        if (!messageStore_.saveMessage(message)) {
+        if (!isValidChatMessage(message)) {
+            qWarning() << "Ignoring invalid chat message from session";
+            return;
+        }
+
+        const auto senderName = message.senderName.trimmed();
+
+        if (!messageStore_.hasUser(senderName)) {
+            qWarning() << "Ignoring chat message from unknown user:" << senderName;
+            return;
+        }
+
+        // TODO: Replace this self-declared session binding with login and authentication
+        // once user creation/authentication exist.
+        if (!session->hasUserName()) {
+            session->setUserName(senderName);
+        } else if (session->userName() != senderName) {
+            qWarning() << "Ignoring chat message with sender mismatch. Session user:"
+                       << session->userName() << "message sender:" << senderName;
+            return;
+        }
+
+        Message verifiedMessage = message;
+        verifiedMessage.senderName = senderName;
+
+        qInfo() << "Message from" << verifiedMessage.senderName << ":" << verifiedMessage.text;
+
+        if (!messageStore_.saveMessage(verifiedMessage)) {
             qWarning() << "Message was not persisted";
+            return;
         }
 
         for (auto* connectedSession : std::as_const(sessions_)) {
-            connectedSession->sendMessage(message);
+            connectedSession->sendMessage(verifiedMessage);
         }
     }
-
-    Q_UNUSED(session)
 }
 
 void server::handleSessionDisconnected(Session* session) {

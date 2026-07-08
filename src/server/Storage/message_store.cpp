@@ -16,7 +16,7 @@ using messenger::protocol::Message;
 
 namespace {
 
-constexpr auto DefaultUserId = 1;
+constexpr auto InvalidUserId = -1;
 
 QString lastErrorText(const QSqlQuery& query) {
     return query.lastError().text();
@@ -124,6 +124,12 @@ bool MessageStore::saveMessage(const Message& message) {
         return false;
     }
 
+    const auto userId = userIdForUserName(message.senderName);
+    if (userId == InvalidUserId) {
+        qWarning() << "Cannot save message for unknown user:" << message.senderName;
+        return false;
+    }
+
     auto database = QSqlDatabase::database(connectionName_);
     QSqlQuery query(database);
     query.prepare(R"(
@@ -141,7 +147,7 @@ bool MessageStore::saveMessage(const Message& message) {
             :stored_at
         )
     )");
-    query.bindValue(QStringLiteral(":user_id"), DefaultUserId);
+    query.bindValue(QStringLiteral(":user_id"), userId);
     query.bindValue(QStringLiteral(":message_type"), message.messageType);
     query.bindValue(QStringLiteral(":body"), message.text);
     query.bindValue(QStringLiteral(":client_timestamp"),
@@ -168,9 +174,10 @@ QList<Message> MessageStore::loadMessages() const {
     auto database = QSqlDatabase::database(connectionName_);
     QSqlQuery query(database);
     query.prepare(R"(
-        SELECT message_type, body, client_timestamp
+        SELECT users.username, messages.message_type, messages.body, messages.client_timestamp
         FROM messages
-        ORDER BY stored_at ASC, id ASC
+        INNER JOIN users ON users.id = messages.user_id
+        ORDER BY messages.stored_at ASC, messages.id ASC
     )");
 
     if (!query.exec()) {
@@ -181,6 +188,7 @@ QList<Message> MessageStore::loadMessages() const {
     while (query.next()) {
         Message message;
         message.protocolVersion = CurrentProtocolVersion;
+        message.senderName = query.value(QStringLiteral("username")).toString();
         message.messageType = query.value(QStringLiteral("message_type")).toUInt();
         message.text = query.value(QStringLiteral("body")).toString();
         message.timestamp = QDateTime::fromString(query.value(QStringLiteral("client_timestamp")).toString(),
@@ -192,6 +200,32 @@ QList<Message> MessageStore::loadMessages() const {
     }
 
     return messages;
+}
+
+bool MessageStore::hasUser(const QString& userName) const {
+    return userIdForUserName(userName) != InvalidUserId;
+}
+
+int MessageStore::userIdForUserName(const QString& userName) const {
+    if (!initialized_) {
+        qWarning() << "Cannot look up user before message store initialization";
+        return InvalidUserId;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    query.prepare(QStringLiteral("SELECT id FROM users WHERE username = :username"));
+    query.bindValue(QStringLiteral(":username"), userName.trimmed());
+
+    if (!query.exec()) {
+        qWarning() << "Could not look up user:" << lastErrorText(query);
+        return InvalidUserId;
+    }
+
+    if (!query.next()) {
+        return InvalidUserId;
+    }
+
+    return query.value(QStringLiteral("id")).toInt();
 }
 
 bool MessageStore::openDatabase() {

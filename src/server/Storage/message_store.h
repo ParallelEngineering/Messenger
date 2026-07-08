@@ -18,10 +18,12 @@ class MessageStore {
 
     bool initialize();
     void close();
+    bool hasUser(const QString& userName) const;
     bool saveMessage(const messenger::protocol::Message& message);
     QList<messenger::protocol::Message> loadMessages() const;
 
    private:
+    int userIdForUserName(const QString& userName) const;
     bool openDatabase();
     bool runMigrations();
     bool executeSqlScript(const QString& script) const;

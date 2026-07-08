@@ -2,6 +2,7 @@
 #define MESSENGER_SERVER_H
 
 #include "message.h"
+#include "Storage/message_store.h"
 
 #include <QAbstractSocket>
 #include <QObject>
@@ -19,6 +20,7 @@ class server final : public QObject {
     ~server() override;
 
     bool listen(const QHostAddress& address, quint16 port);
+    void shutdown();
 
     server(const server&) = delete;
     server& operator=(const server&) = delete;
@@ -36,6 +38,7 @@ class server final : public QObject {
 
     QTcpServer tcpServer_;
     QSet<Session*> sessions_;
+    MessageStore messageStore_;
 };
 
 #endif  // MESSENGER_SERVER_H

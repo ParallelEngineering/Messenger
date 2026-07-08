@@ -3,6 +3,7 @@
 
 #include <memory>
 
+class ConnectionStore;
 class NetworkManager;
 class QGuiApplication;
 class QQmlApplicationEngine;
@@ -24,6 +25,7 @@ class client {
 
     std::unique_ptr<QQmlApplicationEngine> engine_;
     std::unique_ptr<NetworkManager> networkManager_;
+    std::unique_ptr<ConnectionStore> connectionStore_;
 };
 
 #endif  // MESSENGER_CLIENT_H

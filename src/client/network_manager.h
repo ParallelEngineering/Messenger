@@ -20,6 +20,7 @@ class NetworkManager final : public QObject {
     [[nodiscard]] QString statusText() const;
     [[nodiscard]] int defaultPort() const;
 
+    // Methode that can be called from QML
     Q_INVOKABLE void connectToServer(const QString& host, quint16 port);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void sendChatMessage(const QString& sender, const QString& recipient, const QString& text);

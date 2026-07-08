@@ -13,16 +13,39 @@ Window {
     color: "#f7f8fa"
 
     property string receivedMessages: ""
+    property string pendingDeleteKeyName: ""
+    property bool connectionInputValid: userNameInput.text.trim().length > 0
+                                        && hostInput.text.trim().length > 0
+                                        && portInput.acceptableInput
+                                        && connectionStore.selectedKeyName.trim().length > 0
 
     function connectWithInput() {
         if (userNameInput.text.trim().length === 0
                 || hostInput.text.trim().length === 0
-                || !portInput.acceptableInput) {
+                || !portInput.acceptableInput
+                || connectionStore.selectedKeyName.trim().length === 0) {
             return
         }
 
         networkManager.userName = userNameInput.text
+        if (!connectionStore.saveLastConnection(hostInput.text,
+                                                Number(portInput.text),
+                                                userNameInput.text,
+                                                connectionStore.selectedKeyName)) {
+            return
+        }
+
         networkManager.connectToServer(hostInput.text, Number(portInput.text))
+    }
+
+    function syncKeyComboBox() {
+        if (!keyComboBox) {
+            return
+        }
+
+        keyComboBox.currentIndex = connectionStore.selectedKeyName.length > 0
+                ? keyComboBox.find(connectionStore.selectedKeyName)
+                : -1
     }
 
     component FieldLabel: Text {
@@ -82,6 +105,73 @@ Window {
         }
     }
 
+    component IconButton: Rectangle {
+        id: iconButton
+
+        property bool enabledState: true
+        property string iconName: "edit"
+        property color activeColor: "#205493"
+        property color iconColor: enabledState ? "#ffffff" : "#43515f"
+        signal clicked()
+
+        width: 44
+        height: 44
+        radius: 6
+        color: enabledState ? activeColor : "#d7dde5"
+
+        Canvas {
+            id: iconCanvas
+            anchors.centerIn: parent
+            width: 24
+            height: 24
+
+            onPaint: {
+                const context = getContext("2d")
+                context.clearRect(0, 0, width, height)
+                context.strokeStyle = iconButton.iconColor
+                context.fillStyle = iconButton.iconColor
+                context.lineWidth = 2
+                context.lineCap = "round"
+                context.lineJoin = "round"
+
+                if (iconButton.iconName === "close") {
+                    context.beginPath()
+                    context.moveTo(7, 7)
+                    context.lineTo(17, 17)
+                    context.moveTo(17, 7)
+                    context.lineTo(7, 17)
+                    context.stroke()
+                } else {
+                    context.beginPath()
+                    context.moveTo(5, 19)
+                    context.lineTo(9, 18)
+                    context.lineTo(18, 9)
+                    context.lineTo(15, 6)
+                    context.lineTo(6, 15)
+                    context.closePath()
+                    context.stroke()
+
+                    context.beginPath()
+                    context.moveTo(14, 7)
+                    context.lineTo(17, 10)
+                    context.stroke()
+                }
+            }
+        }
+
+        MouseArea {
+            id: iconMouseArea
+            anchors.fill: parent
+            enabled: iconButton.enabledState
+            hoverEnabled: true
+            cursorShape: iconButton.enabledState ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: iconButton.clicked()
+        }
+
+        onIconNameChanged: iconCanvas.requestPaint()
+        onIconColorChanged: iconCanvas.requestPaint()
+    }
+
     Item {
         id: connectionPage
         anchors.fill: parent
@@ -120,9 +210,63 @@ Window {
                 TextInputBox {
                     id: userNameInput
                     width: parent.width
-                    text: networkManager.userName
+                    text: connectionStore.userName
                     onAccepted: connectWithInput()
-                    onTextChanged: networkManager.userName = text
+                    onTextChanged: {
+                        networkManager.userName = text
+                        connectionStore.userName = text
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 8
+
+                FieldLabel {
+                    text: qsTr("RSA-Schlüssel")
+                }
+
+                Row {
+                    id: keySelectionRow
+                    width: parent.width
+                    spacing: 12
+
+                    ComboBox {
+                        id: keyComboBox
+                        width: Math.max(120, keySelectionRow.width - manageKeysButton.width - keySelectionRow.spacing)
+                        height: 44
+                        model: connectionStore.availableKeyNames
+                        currentIndex: -1
+
+                        background: Rectangle {
+                            radius: 6
+                            color: "#ffffff"
+                            border.color: keyComboBox.activeFocus ? "#205493" : "#c8d0d9"
+                        }
+
+                        contentItem: Text {
+                            leftPadding: 11
+                            rightPadding: 28
+                            text: keyComboBox.displayText
+                            color: "#1f2933"
+                            font.pixelSize: 15
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+
+                        onActivated: function(index) {
+                            connectionStore.selectedKeyName = textAt(index)
+                        }
+
+                        Component.onCompleted: syncKeyComboBox()
+                    }
+
+                    IconButton {
+                        id: manageKeysButton
+                        iconName: "edit"
+                        onClicked: keyManagementPopup.open()
+                    }
                 }
             }
 
@@ -137,8 +281,9 @@ Window {
                 TextInputBox {
                     id: hostInput
                     width: parent.width
-                    text: "127.0.0.1"
+                    text: connectionStore.host
                     onAccepted: connectWithInput()
+                    onTextChanged: connectionStore.host = text
                 }
             }
 
@@ -153,8 +298,13 @@ Window {
                 TextInputBox {
                     id: portInput
                     width: parent.width
-                    text: String(networkManager.defaultPort)
+                    text: String(connectionStore.port)
                     onAccepted: connectWithInput()
+                    onTextChanged: {
+                        if (acceptableInput) {
+                            connectionStore.port = Number(text)
+                        }
+                    }
                     validator: IntValidator {
                         bottom: 1
                         top: 65535
@@ -165,10 +315,420 @@ Window {
             ActionButton {
                 width: parent.width
                 text: qsTr("Verbinden")
-                enabledState: userNameInput.text.trim().length > 0
-                              && hostInput.text.trim().length > 0
-                              && portInput.acceptableInput
+                enabledState: connectionInputValid
                 onClicked: connectWithInput()
+            }
+        }
+    }
+
+    Popup {
+        id: keyManagementPopup
+        width: Math.min(476, parent.width - 64)
+        height: Math.min(446, parent.height - 64)
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        modal: true
+        focus: true
+        padding: 8
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        transformOrigin: Item.Center
+
+        enter: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 0
+                to: 1
+                duration: 140
+                easing.type: Easing.OutCubic
+            }
+
+            NumberAnimation {
+                property: "scale"
+                from: 0.98
+                to: 1
+                duration: 140
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        exit: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 1
+                to: 0
+                duration: 100
+                easing.type: Easing.InCubic
+            }
+
+            NumberAnimation {
+                property: "scale"
+                from: 1
+                to: 0.98
+                duration: 100
+                easing.type: Easing.InCubic
+            }
+        }
+
+        function submit() {
+            if (newKeyNameInput.text.trim().length === 0) {
+                return
+            }
+
+            if (connectionStore.createKeyPair(newKeyNameInput.text)) {
+                newKeyNameInput.text = ""
+            }
+        }
+
+        onOpened: {
+            connectionStore.clearErrorText()
+            pendingDeleteKeyName = ""
+            newKeyNameInput.text = ""
+            newKeyNameInput.forceActiveFocus()
+        }
+
+        background: Rectangle {
+            anchors {
+                fill: parent
+                margins: 8
+            }
+            radius: 8
+            color: "#ffffff"
+            border.color: "#c8d0d9"
+        }
+
+        Overlay.modal: Rectangle {
+            color: "#1f2933"
+            opacity: keyManagementPopup.visible ? 0.28 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 140
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        contentItem: Item {
+            anchors.fill: parent
+
+            Column {
+                anchors {
+                    fill: parent
+                    margins: 20
+                }
+                spacing: 16
+
+                Row {
+                    width: parent.width
+                    height: 32
+                    spacing: 12
+
+                    Text {
+                        width: Math.max(120, parent.width - closeKeyManagementButton.width - parent.spacing)
+                        text: qsTr("RSA-Schlüssel")
+                        color: "#1f2933"
+                        font.pixelSize: 22
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+
+                    IconButton {
+                        id: closeKeyManagementButton
+                        width: 32
+                        height: 32
+                        iconName: "close"
+                        activeColor: "#d7dde5"
+                        iconColor: "#43515f"
+                        onClicked: keyManagementPopup.close()
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: "#e3e8ef"
+                }
+
+                Item {
+                    width: parent.width
+                    height: Math.max(92, parent.height - 32 - 1 - createKeySection.height
+                                     - errorMessage.height - parent.spacing * 4)
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width
+                        text: qsTr("Noch keine RSA-Schlüssel vorhanden.")
+                        color: "#607080"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        visible: connectionStore.availableKeyNames.length === 0
+                    }
+
+                    ListView {
+                        id: keysListView
+                        anchors.fill: parent
+                        visible: connectionStore.availableKeyNames.length > 0
+                        clip: true
+                        spacing: 8
+                        model: connectionStore.availableKeyNames
+
+                        delegate: Rectangle {
+                            required property string modelData
+
+                            width: keysListView.width
+                            height: 48
+                            radius: 6
+                            color: modelData === connectionStore.selectedKeyName ? "#eef4fb" : "#f7f8fa"
+                            border.color: modelData === connectionStore.selectedKeyName ? "#8bb4dc" : "#d7dde5"
+
+                            Text {
+                                anchors {
+                                    left: parent.left
+                                    right: deleteKeyButton.left
+                                    verticalCenter: parent.verticalCenter
+                                    leftMargin: 12
+                                    rightMargin: 12
+                                }
+                                text: modelData
+                                color: "#1f2933"
+                                font.pixelSize: 15
+                                elide: Text.ElideRight
+                            }
+
+                            Rectangle {
+                                id: deleteKeyButton
+                                anchors {
+                                    right: parent.right
+                                    verticalCenter: parent.verticalCenter
+                                    rightMargin: 8
+                                }
+                                width: 76
+                                height: 32
+                                radius: 6
+                                color: deleteKeyMouseArea.containsMouse ? "#ead8da" : "#f3e7e8"
+                                border.color: "#ddb9bd"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: qsTr("Löschen")
+                                    color: "#7a2830"
+                                    font.pixelSize: 13
+                                }
+
+                                MouseArea {
+                                    id: deleteKeyMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        connectionStore.clearErrorText()
+                                        pendingDeleteKeyName = modelData
+                                        deleteKeyConfirmationPopup.open()
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors {
+                                    left: parent.left
+                                    right: deleteKeyButton.left
+                                    top: parent.top
+                                    bottom: parent.bottom
+                                }
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: connectionStore.selectedKeyName = modelData
+                            }
+                        }
+
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                        }
+                    }
+                }
+
+                Column {
+                    id: createKeySection
+                    width: parent.width
+                    spacing: 8
+
+                    FieldLabel {
+                        text: qsTr("Neuer Schlüssel")
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: 12
+
+                        TextInputBox {
+                            id: newKeyNameInput
+                            width: Math.max(120, parent.width - createManagedKeyButton.width - parent.spacing)
+                            onAccepted: keyManagementPopup.submit()
+                        }
+
+                        ActionButton {
+                            id: createManagedKeyButton
+                            width: 112
+                            text: qsTr("Erstellen")
+                            enabledState: newKeyNameInput.text.trim().length > 0
+                            onClicked: keyManagementPopup.submit()
+                        }
+                    }
+                }
+
+                Text {
+                    id: errorMessage
+                    width: parent.width
+                    height: visible ? paintedHeight : 0
+                    text: connectionStore.errorText
+                    color: "#7a2830"
+                    font.pixelSize: 13
+                    wrapMode: Text.Wrap
+                    visible: text.length > 0
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: deleteKeyConfirmationPopup
+        width: Math.min(396, parent.width - 64)
+        height: Math.min(276, parent.height - 64)
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        modal: true
+        focus: true
+        padding: 8
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        transformOrigin: Item.Center
+
+        enter: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 0
+                to: 1
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+
+            NumberAnimation {
+                property: "scale"
+                from: 0.98
+                to: 1
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        exit: Transition {
+            NumberAnimation {
+                property: "opacity"
+                from: 1
+                to: 0
+                duration: 90
+                easing.type: Easing.InCubic
+            }
+
+            NumberAnimation {
+                property: "scale"
+                from: 1
+                to: 0.98
+                duration: 90
+                easing.type: Easing.InCubic
+            }
+        }
+
+        background: Rectangle {
+            anchors {
+                fill: parent
+                margins: 8
+            }
+            radius: 8
+            color: "#ffffff"
+            border.color: "#c8d0d9"
+        }
+
+        Overlay.modal: Rectangle {
+            color: "#1f2933"
+            opacity: deleteKeyConfirmationPopup.visible ? 0.34 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        onClosed: {
+            if (!visible) {
+                pendingDeleteKeyName = ""
+            }
+        }
+
+        contentItem: Item {
+            anchors.fill: parent
+
+            Column {
+                anchors {
+                    fill: parent
+                    margins: 20
+                }
+                spacing: 14
+
+                Text {
+                    width: parent.width
+                    text: qsTr("Schlüssel löschen")
+                    color: "#1f2933"
+                    font.pixelSize: 22
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    text: qsTr("Der RSA-Schlüssel \"%1\" kann nicht wiederhergestellt werden. Eine Verbindung zum Server unter diesem Benutzer ist anschließend nicht mehr möglich.").arg(pendingDeleteKeyName)
+                    color: "#43515f"
+                    font.pixelSize: 14
+                    wrapMode: Text.Wrap
+                }
+
+                Text {
+                    width: parent.width
+                    height: visible ? paintedHeight : 0
+                    text: connectionStore.errorText
+                    color: "#7a2830"
+                    font.pixelSize: 13
+                    wrapMode: Text.Wrap
+                    visible: text.length > 0
+                }
+
+                Item {
+                    width: parent.width
+                    height: Math.max(0, parent.height - 22 - 56 - 44 - parent.spacing * 3)
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 12
+
+                    ActionButton {
+                        width: Math.max(120, (parent.width - parent.spacing) / 2)
+                        text: qsTr("Abbrechen")
+                        activeColor: "#607080"
+                        onClicked: deleteKeyConfirmationPopup.close()
+                    }
+
+                    ActionButton {
+                        width: Math.max(120, (parent.width - parent.spacing) / 2)
+                        text: qsTr("Löschen")
+                        activeColor: "#9f2f3a"
+                        enabledState: pendingDeleteKeyName.length > 0
+                        onClicked: {
+                            if (connectionStore.deleteKeyPair(pendingDeleteKeyName)) {
+                                deleteKeyConfirmationPopup.close()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -339,6 +899,18 @@ Window {
             Qt.callLater(function() {
                 messageFlickable.contentY = Math.max(0, messageFlickable.contentHeight - messageFlickable.height)
             })
+        }
+    }
+
+    Connections {
+        target: connectionStore
+
+        function onAvailableKeyNamesChanged() {
+            syncKeyComboBox()
+        }
+
+        function onSelectedKeyNameChanged() {
+            syncKeyComboBox()
         }
     }
 }

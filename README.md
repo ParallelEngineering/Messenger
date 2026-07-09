@@ -4,10 +4,10 @@ Messenger is a simple chat program with a client and a server. Users can connect
 
 ## Functionality
 
-- **Client connection:** enter a server host, connect automatically to the server, disconnect again when terminating the program, and see the current connection status in the UI.
+- **Client connection:** enter a server host, connect to the server, disconnect again when terminating the program, and see the current connection status in the UI.
 - **Group chat authentication:** each server represents one group chat; user accounts are created on the server with a name and a public key, without passwords. Clients authenticate through RSA-based verification using the public key stored for their account.
 - **Message sending:** compose text messages and send them to the connected server.
-- **Message receiving:** display incoming messages in the client window as they arrive from the server.
+- **Message receiving:** display incoming messages in the client window as they arrive from the server with timestamp and username.
 - **Group chat forwarding:** the server keeps track of the clients connected to its group chat and broadcasts chat messages to every active session.
 - **Chat history:** the server stores the group chat history and sends all previous messages to newly connected clients.
 - **Protocol validation:** client and server exchange structured messages and reject unsupported protocol versions.

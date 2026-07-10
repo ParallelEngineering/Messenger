@@ -138,7 +138,7 @@ void server::handleSessionDisconnected(Session* session) {
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Messenger"));
-    QCoreApplication::setOrganizationName(QStringLiteral("Messenger"));
+    QCoreApplication::setOrganizationName(QStringLiteral("ParallelEngineering"));
 
     auto& serverInstance = server::getInstance();
     if (!serverInstance.listen(QHostAddress::Any, DefaultPort)) {

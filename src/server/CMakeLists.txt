@@ -23,4 +23,5 @@ target_link_libraries(Messenger-Server
             Qt6::Network
             Qt6::Sql
             Messenger-Shared
+            RSA
 )

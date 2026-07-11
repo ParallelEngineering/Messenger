@@ -3,6 +3,7 @@
 
 #include "message.h"
 
+#include <QByteArray>
 #include <QList>
 #include <QString>
 
@@ -26,6 +27,7 @@ class MessageStore {
     int userIdForUserName(const QString& userName) const;
     bool openDatabase();
     bool runMigrations();
+    bool ensureAdminUser(const QByteArray& publicKey) const;
     bool executeSqlScript(const QString& script) const;
     QString databasePath() const;
 

@@ -1,5 +1,7 @@
 #include "message_store.h"
 
+#include "keyPair.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -11,15 +13,68 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 
+#include <cstdint>
+#include <exception>
+#include <optional>
+#include <vector>
+
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::Message;
 
 namespace {
 
 constexpr auto InvalidUserId = -1;
+constexpr auto AdminPublicKeyFileName = "admin.public.rsa";
 
 QString lastErrorText(const QSqlQuery& query) {
     return query.lastError().text();
+}
+
+std::optional<QByteArray> loadAdminPublicKey(const QString& databasePath) {
+    const auto publicKeyPath = QFileInfo(databasePath).absoluteDir().filePath(
+        QString::fromLatin1(AdminPublicKeyFileName));
+    const QFileInfo publicKeyInfo(publicKeyPath);
+    if (!publicKeyInfo.exists()) {
+        qCritical() << "Admin public key file does not exist:" << publicKeyInfo.absoluteFilePath();
+        return std::nullopt;
+    }
+    if (!publicKeyInfo.isFile()) {
+        qCritical() << "Admin public key path is not a file:" << publicKeyInfo.absoluteFilePath();
+        return std::nullopt;
+    }
+
+    QFile publicKeyFile(publicKeyPath);
+    if (!publicKeyFile.open(QIODevice::ReadOnly)) {
+        qCritical() << "Could not read admin public key file:" << publicKeyInfo.absoluteFilePath()
+                    << publicKeyFile.errorString();
+        return std::nullopt;
+    }
+
+    const auto publicKeyData = publicKeyFile.readAll();
+    if (publicKeyData.isEmpty()) {
+        qCritical() << "Admin public key file is empty:" << publicKeyInfo.absoluteFilePath();
+        return std::nullopt;
+    }
+
+    const std::vector<std::uint8_t> serializedKey(publicKeyData.cbegin(), publicKeyData.cend());
+    try {
+        PublicKey publicKey;
+        const operations::BigInt one(1);
+        if (!keyPair::s_deserialize(serializedKey, publicKey.n, publicKey.e)
+            || publicKey.n <= one
+            || publicKey.e <= one
+            || publicKey.serialize() != serializedKey) {
+            qCritical() << "Admin public key file contains an invalid RSA public key:"
+                        << publicKeyInfo.absoluteFilePath();
+            return std::nullopt;
+        }
+    } catch (const std::exception& exception) {
+        qCritical() << "Could not parse admin public key file:" << publicKeyInfo.absoluteFilePath()
+                    << exception.what();
+        return std::nullopt;
+    }
+
+    return publicKeyData;
 }
 
 QList<QString> splitSqlStatements(const QString& script) {
@@ -106,11 +161,20 @@ bool MessageStore::initialize() {
         return true;
     }
 
+    const auto adminPublicKey = loadAdminPublicKey(databasePath());
+    if (!adminPublicKey) {
+        return false;
+    }
+
     if (!openDatabase()) {
         return false;
     }
 
     if (!runMigrations()) {
+        return false;
+    }
+
+    if (!ensureAdminUser(*adminPublicKey)) {
         return false;
     }
 
@@ -338,6 +402,39 @@ bool MessageStore::runMigrations() {
         }
 
         qInfo() << "Applied database migration" << migrationFile;
+    }
+
+    return true;
+}
+
+bool MessageStore::ensureAdminUser(const QByteArray& publicKey) const {
+    auto database = QSqlDatabase::database(connectionName_);
+    if (!database.transaction()) {
+        qWarning() << "Could not start admin user transaction:" << database.lastError().text();
+        return false;
+    }
+
+    QSqlQuery query(database);
+    query.prepare(R"(
+        INSERT INTO users (username, public_key, created_at)
+        VALUES (:username, :public_key, :created_at)
+        ON CONFLICT(username) DO UPDATE SET public_key = excluded.public_key
+    )");
+    query.bindValue(QStringLiteral(":username"), QStringLiteral("admin"));
+    query.bindValue(QStringLiteral(":public_key"), publicKey);
+    query.bindValue(QStringLiteral(":created_at"),
+                    QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+
+    if (!query.exec()) {
+        qWarning() << "Could not create or update admin user:" << lastErrorText(query);
+        database.rollback();
+        return false;
+    }
+
+    if (!database.commit()) {
+        qWarning() << "Could not commit admin user transaction:" << database.lastError().text();
+        database.rollback();
+        return false;
     }
 
     return true;

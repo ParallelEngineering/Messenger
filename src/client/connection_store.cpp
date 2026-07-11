@@ -12,6 +12,8 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
+#include <exception>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -23,6 +25,11 @@ constexpr auto PrivateKeySuffix = ".private.rsa";
 
 QByteArray toByteArray(const std::vector<uint8_t>& bytes) {
     return QByteArray(reinterpret_cast<const char*>(bytes.data()), static_cast<qsizetype>(bytes.size()));
+}
+
+std::vector<uint8_t> toByteVector(const QByteArray& bytes) {
+    const auto* begin = reinterpret_cast<const uint8_t*>(bytes.constData());
+    return {begin, begin + bytes.size()};
 }
 
 }  // namespace
@@ -51,6 +58,10 @@ QString ConnectionStore::userName() const {
 
 QString ConnectionStore::selectedKeyName() const {
     return selectedKeyName_;
+}
+
+const keyPair* ConnectionStore::currentKeyPair() const {
+    return currentKeyPair_ ? &*currentKeyPair_ : nullptr;
 }
 
 QStringList ConnectionStore::availableKeyNames() const {
@@ -92,12 +103,35 @@ void ConnectionStore::setUserName(const QString& userName) {
 
 void ConnectionStore::setSelectedKeyName(const QString& selectedKeyName) {
     const auto trimmedKeyName = selectedKeyName.trimmed();
-    if (selectedKeyName_ == trimmedKeyName) {
+
+    if (trimmedKeyName.isEmpty()) {
+        const auto selectionChanged = !selectedKeyName_.isEmpty();
+        selectedKeyName_.clear();
+        currentKeyPair_.reset();
+        if (selectionChanged) {
+            emit selectedKeyNameChanged();
+        }
         return;
     }
 
+    if (selectedKeyName_ == trimmedKeyName && currentKeyPair_) {
+        return;
+    }
+
+    auto loadedKeyPair = loadKeyPair(trimmedKeyName);
+    if (!loadedKeyPair) {
+        // Re-emit the current value so QML controls return to the still-active selection.
+        emit selectedKeyNameChanged();
+        return;
+    }
+
+    const auto selectionChanged = selectedKeyName_ != trimmedKeyName;
     selectedKeyName_ = trimmedKeyName;
-    emit selectedKeyNameChanged();
+    currentKeyPair_ = std::move(*loadedKeyPair);
+    setErrorText({});
+    if (selectionChanged) {
+        emit selectedKeyNameChanged();
+    }
 }
 
 bool ConnectionStore::createKeyPair(const QString& name) {
@@ -153,7 +187,7 @@ bool ConnectionStore::createKeyPair(const QString& name) {
 
     refreshAvailableKeyNames();
     setSelectedKeyName(keyName);
-    return true;
+    return selectedKeyName_ == keyName && currentKeyPair_.has_value();
 }
 
 bool ConnectionStore::deleteKeyPair(const QString& name) {
@@ -199,6 +233,13 @@ bool ConnectionStore::saveLastConnection(const QString& host,
         !availableKeyNames_.contains(trimmedKeyName)) {
         setErrorText(tr("Die Verbindungsdaten sind unvollständig."));
         return false;
+    }
+
+    if (selectedKeyName_ != trimmedKeyName || !currentKeyPair_) {
+        setSelectedKeyName(trimmedKeyName);
+        if (selectedKeyName_ != trimmedKeyName || !currentKeyPair_) {
+            return false;
+        }
     }
 
     const auto settingsFileInfo = QFileInfo(settingsFilePath());
@@ -277,6 +318,29 @@ QString ConnectionStore::privateKeyPath(const QString& keyName) const {
     return QDir(keyDirectoryPath()).filePath(keyName + QString::fromLatin1(PrivateKeySuffix));
 }
 
+std::optional<keyPair> ConnectionStore::loadKeyPair(const QString& keyName) {
+    QFile publicKeyFile(publicKeyPath(keyName));
+    if (!publicKeyFile.open(QIODevice::ReadOnly)) {
+        setErrorText(tr("Der öffentliche Schlüssel konnte nicht eingelesen werden."));
+        return std::nullopt;
+    }
+    const auto publicKeyBytes = toByteVector(publicKeyFile.readAll());
+
+    QFile privateKeyFile(privateKeyPath(keyName));
+    if (!privateKeyFile.open(QIODevice::ReadOnly)) {
+        setErrorText(tr("Der private Schlüssel konnte nicht eingelesen werden."));
+        return std::nullopt;
+    }
+    const auto privateKeyBytes = toByteVector(privateKeyFile.readAll());
+
+    try {
+        return keyPair::create(publicKeyBytes, privateKeyBytes);
+    } catch (const std::exception&) {
+        setErrorText(tr("Das Schlüsselpaar konnte nicht deserialisiert werden."));
+        return std::nullopt;
+    }
+}
+
 void ConnectionStore::refreshAvailableKeyNames() {
     const QDir keyDirectory(keyDirectoryPath());
     const auto publicKeyFiles = keyDirectory.entryList({QStringLiteral("*") + QString::fromLatin1(PublicKeySuffix)},
@@ -333,12 +397,16 @@ void ConnectionStore::loadLastConnection() {
 }
 
 void ConnectionStore::clearInvalidSelectedKey() {
-    if (selectedKeyName_.isEmpty() || availableKeyNames_.contains(selectedKeyName_)) {
+    if (selectedKeyName_.isEmpty()) {
+        currentKeyPair_.reset();
         return;
     }
 
-    selectedKeyName_.clear();
-    emit selectedKeyNameChanged();
+    if (availableKeyNames_.contains(selectedKeyName_) && currentKeyPair_) {
+        return;
+    }
+
+    setSelectedKeyName({});
 }
 
 void ConnectionStore::setErrorText(const QString& errorText) {

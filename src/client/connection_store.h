@@ -1,9 +1,13 @@
 #ifndef MESSENGER_CONNECTION_STORE_H
 #define MESSENGER_CONNECTION_STORE_H
 
+#include "keyPair.h"
+
 #include <QObject>
 #include <QString>
 #include <QStringList>
+
+#include <optional>
 
 class ConnectionStore final : public QObject {
     Q_OBJECT
@@ -21,6 +25,7 @@ class ConnectionStore final : public QObject {
     [[nodiscard]] int port() const;
     [[nodiscard]] QString userName() const;
     [[nodiscard]] QString selectedKeyName() const;
+    [[nodiscard]] const keyPair* currentKeyPair() const;
     [[nodiscard]] QStringList availableKeyNames() const;
     [[nodiscard]] QString errorText() const;
 
@@ -54,6 +59,7 @@ class ConnectionStore final : public QObject {
     [[nodiscard]] bool keyExists(const QString& keyName) const;
     [[nodiscard]] QString publicKeyPath(const QString& keyName) const;
     [[nodiscard]] QString privateKeyPath(const QString& keyName) const;
+    [[nodiscard]] std::optional<keyPair> loadKeyPair(const QString& keyName);
 
     void refreshAvailableKeyNames();
     void loadLastConnection();
@@ -64,6 +70,7 @@ class ConnectionStore final : public QObject {
     int port_;
     QString userName_;
     QString selectedKeyName_;
+    std::optional<keyPair> currentKeyPair_;
     QStringList availableKeyNames_;
     QString errorText_;
 };

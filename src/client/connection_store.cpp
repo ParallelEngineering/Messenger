@@ -9,6 +9,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QMetaObject>
+#include <QPointer>
 #include <QSaveFile>
 #include <QStandardPaths>
 
@@ -44,6 +46,10 @@ ConnectionStore::ConnectionStore(QObject* parent)
     clearInvalidSelectedKey();
 }
 
+ConnectionStore::~ConnectionStore() {
+    cancelKeyPairCreation();
+}
+
 QString ConnectionStore::host() const {
     return host_;
 }
@@ -71,6 +77,8 @@ QStringList ConnectionStore::availableKeyNames() const {
 QString ConnectionStore::errorText() const {
     return errorText_;
 }
+
+bool ConnectionStore::keyGenerationInProgress() const { return keyGenerationInProgress_; }
 
 void ConnectionStore::setHost(const QString& host) {
     const auto trimmedHost = host.trimmed();
@@ -134,7 +142,7 @@ void ConnectionStore::setSelectedKeyName(const QString& selectedKeyName) {
     }
 }
 
-bool ConnectionStore::createKeyPair(const QString& name) {
+bool ConnectionStore::startKeyPairCreation(const QString& name) {
     const auto keyName = name.trimmed();
     setErrorText({});
 
@@ -153,46 +161,97 @@ bool ConnectionStore::createKeyPair(const QString& name) {
         return false;
     }
 
-    keyPair generatedKeyPair;
-    const auto publicKeyBytes = toByteArray(generatedKeyPair.getPublicKey().serialize());
-    const auto privateKeyBytes = toByteArray(generatedKeyPair.getPrivateKey().serialize());
+    if (discardGeneratedKey_) {
+        discardGeneratedKey_->store(true, std::memory_order_relaxed);
+    }
+    discardGeneratedKey_ = std::make_shared<std::atomic_bool>(false);
+    keyGenerationInProgress_ = true;
+    emit keyGenerationInProgressChanged();
 
-    QFile publicKeyFile(publicKeyPath(keyName));
-    if (!publicKeyFile.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
-        setErrorText(tr("Der öffentliche Schlüssel konnte nicht gespeichert werden."));
-        return false;
+    const QPointer<ConnectionStore> guardedThis(this);
+    const auto discardGeneratedKey = discardGeneratedKey_;
+    keyGenerationThreads_.emplace_back([guardedThis, discardGeneratedKey, keyName]() {
+        QByteArray publicBytes;
+        QByteArray privateBytes;
+        QString error;
+        try {
+            keyPair generated;
+            if (!discardGeneratedKey->load(std::memory_order_relaxed)) {
+                publicBytes = toByteArray(generated.getPublicKey().serialize());
+                privateBytes = toByteArray(generated.getPrivateKey().serialize());
+            }
+        } catch (const std::exception& exception) {
+            error = QString::fromUtf8(exception.what());
+        }
+        if (!guardedThis) return;
+        const auto discarded = discardGeneratedKey->load(std::memory_order_relaxed);
+        QMetaObject::invokeMethod(guardedThis, [guardedThis, keyName, publicBytes, privateBytes, error,
+                                                discarded, discardGeneratedKey]() {
+            if (guardedThis) {
+                guardedThis->finishKeyPairCreation(keyName, publicBytes, privateBytes, error,
+                                                   discarded, discardGeneratedKey);
+            }
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void ConnectionStore::cancelKeyPairCreation() {
+    if (!keyGenerationInProgress_) return;
+    discardGeneratedKey_->store(true, std::memory_order_relaxed);
+    keyGenerationInProgress_ = false;
+    emit keyGenerationInProgressChanged();
+}
+
+void ConnectionStore::finishKeyPairCreation(const QString& keyName, const QByteArray& publicKeyBytes,
+                                            const QByteArray& privateKeyBytes, const QString& workerError,
+                                            bool discarded,
+                                            const std::shared_ptr<std::atomic_bool>& discardGeneratedKey) {
+    discarded = discarded || discardGeneratedKey->load(std::memory_order_relaxed);
+
+    if (!discarded && workerError.isEmpty()) {
+        if (keyExists(keyName)) {
+            setErrorText(tr("Ein Schlüssel mit diesem Namen existiert bereits."));
+        } else {
+            QFile publicKeyFile(publicKeyPath(keyName));
+            if (!publicKeyFile.open(QIODevice::WriteOnly | QIODevice::NewOnly) ||
+                publicKeyFile.write(publicKeyBytes) != publicKeyBytes.size()) {
+                publicKeyFile.remove();
+                setErrorText(tr("Der öffentliche Schlüssel konnte nicht gespeichert werden."));
+            } else {
+                publicKeyFile.close();
+                QFile privateKeyFile(privateKeyPath(keyName));
+                if (!privateKeyFile.open(QIODevice::WriteOnly | QIODevice::NewOnly) ||
+                    privateKeyFile.write(privateKeyBytes) != privateKeyBytes.size()) {
+                    privateKeyFile.remove();
+                    QFile::remove(publicKeyPath(keyName));
+                    setErrorText(tr("Der private Schlüssel konnte nicht gespeichert werden."));
+                } else {
+                    privateKeyFile.close();
+                    refreshAvailableKeyNames();
+                    setSelectedKeyName(keyName);
+                }
+            }
+        }
+    } else if (!discarded) {
+        setErrorText(tr("Das Schlüsselpaar konnte nicht erstellt werden: %1").arg(workerError));
     }
 
-    if (publicKeyFile.write(publicKeyBytes) != publicKeyBytes.size()) {
-        publicKeyFile.remove();
-        setErrorText(tr("Der öffentliche Schlüssel konnte nicht vollständig gespeichert werden."));
-        return false;
+    if (discardGeneratedKey_ == discardGeneratedKey) {
+        discardGeneratedKey_.reset();
+        keyGenerationInProgress_ = false;
+        emit keyGenerationInProgressChanged();
     }
-    publicKeyFile.close();
-
-    QFile privateKeyFile(privateKeyPath(keyName));
-    if (!privateKeyFile.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
-        QFile::remove(publicKeyPath(keyName));
-        setErrorText(tr("Der private Schlüssel konnte nicht gespeichert werden."));
-        return false;
-    }
-
-    if (privateKeyFile.write(privateKeyBytes) != privateKeyBytes.size()) {
-        privateKeyFile.remove();
-        QFile::remove(publicKeyPath(keyName));
-        setErrorText(tr("Der private Schlüssel konnte nicht vollständig gespeichert werden."));
-        return false;
-    }
-    privateKeyFile.close();
-
-    refreshAvailableKeyNames();
-    setSelectedKeyName(keyName);
-    return selectedKeyName_ == keyName && currentKeyPair_.has_value();
 }
 
 bool ConnectionStore::deleteKeyPair(const QString& name) {
     const auto keyName = name.trimmed();
     setErrorText({});
+
+    if (keyGenerationInProgress_) {
+        setErrorText(tr("Während der Schlüsselerstellung kann kein Schlüssel gelöscht werden."));
+        return false;
+    }
 
     if (!availableKeyNames_.contains(keyName)) {
         setErrorText(tr("Der Schlüssel wurde nicht gefunden."));

@@ -431,7 +431,9 @@ Window {
         modal: true
         focus: true
         padding: 8
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        closePolicy: connectionStore.keyGenerationInProgress
+                     ? Popup.NoAutoClose
+                     : Popup.CloseOnEscape | Popup.CloseOnPressOutside
         transformOrigin: Item.Center
 
         enter: Transition {
@@ -475,7 +477,7 @@ Window {
                 return
             }
 
-            if (connectionStore.createKeyPair(newKeyNameInput.text)) {
+            if (connectionStore.startKeyPairCreation(newKeyNameInput.text)) {
                 newKeyNameInput.text = ""
             }
         }
@@ -538,6 +540,7 @@ Window {
                         width: 32
                         height: 32
                         iconName: "close"
+                        enabledState: !connectionStore.keyGenerationInProgress
                         activeColor: "#d7dde5"
                         iconColor: "#43515f"
                         onClicked: keyManagementPopup.close()
@@ -552,7 +555,9 @@ Window {
 
                 Item {
                     width: parent.width
-                    height: Math.max(92, parent.height - 32 - 1 - createKeySection.height
+                    height: Math.max(92, parent.height - 32 - 1
+                                     - (connectionStore.keyGenerationInProgress
+                                        ? keyGenerationSection.height : createKeySection.height)
                                      - errorMessage.height - parent.spacing * 4)
 
                     Text {
@@ -620,7 +625,8 @@ Window {
                                     id: deleteKeyMouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: !connectionStore.keyGenerationInProgress
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                     onClicked: {
                                         connectionStore.clearErrorText()
                                         pendingDeleteKeyName = modelData
@@ -640,6 +646,7 @@ Window {
                     id: createKeySection
                     width: parent.width
                     spacing: 8
+                    visible: !connectionStore.keyGenerationInProgress
 
                     FieldLabel {
                         text: qsTr("Neuer Schlüssel")
@@ -661,6 +668,75 @@ Window {
                             text: qsTr("Erstellen")
                             enabledState: newKeyNameInput.text.trim().length > 0
                             onClicked: keyManagementPopup.submit()
+                        }
+                    }
+                }
+
+                Column {
+                    id: keyGenerationSection
+                    width: parent.width
+                    spacing: 10
+                    visible: connectionStore.keyGenerationInProgress
+
+                    FieldLabel {
+                        width: parent.width
+                        text: qsTr("Schlüsselerzeugung...")
+                        elide: Text.ElideRight
+                    }
+
+                    Canvas {
+                        id: progressTrack
+                        width: parent.width
+                        height: 12
+                        antialiasing: true
+                        property real barX: -width * 0.32
+
+                        onBarXChanged: requestPaint()
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+
+                        onPaint: {
+                            const context = getContext("2d")
+                            const radius = height / 2
+                            const barWidth = width * 0.32
+                            context.reset()
+
+                            context.beginPath()
+                            context.roundedRect(0, 0, width, height, radius, radius)
+                            context.fillStyle = "#e3e8ef"
+                            context.fill()
+                            context.clip()
+
+                            context.beginPath()
+                            context.roundedRect(barX, 0, barWidth, height, radius, radius)
+                            context.fillStyle = "#205493"
+                            context.fill()
+                        }
+
+                        NumberAnimation on barX {
+                            running: connectionStore.keyGenerationInProgress
+                            loops: Animation.Infinite
+                            from: -progressTrack.width * 0.32
+                            to: progressTrack.width
+                            duration: 1100
+                            easing.type: Easing.InOutCubic
+                        }
+                    }
+
+                    Item {
+                        width: parent.width
+                        height: 44
+
+                        QuietButton {
+                            id: cancelKeyGenerationButton
+                            anchors.right: parent.right
+                            width: 112
+                            text: qsTr("Abbrechen")
+                            normalColor: "#ffffff"
+                            hoverColor: "#f7f8fa"
+                            borderColor: "#c8d0d9"
+                            textColor: "#43515f"
+                            onClicked: connectionStore.cancelKeyPairCreation()
                         }
                     }
                 }

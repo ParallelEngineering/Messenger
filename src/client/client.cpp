@@ -7,6 +7,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickStyle>
 
 client& client::getInstance() {
     static client instance;
@@ -46,6 +47,7 @@ int client::run(QGuiApplication& app) {
 }
 
 int main(int argc, char* argv[]) {
+    QQuickStyle::setStyle(QStringLiteral("Material"));
     QGuiApplication app(argc, argv);
 
     auto& clientInstance = client::getInstance();

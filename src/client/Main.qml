@@ -12,12 +12,15 @@ Window {
 
     color: "#f7f8fa"
 
-    property string receivedMessages: ""
     property string pendingDeleteKeyName: ""
     property bool connectionInputValid: userNameInput.text.trim().length > 0
                                         && hostInput.text.trim().length > 0
                                         && portInput.acceptableInput
                                         && connectionStore.selectedKeyName.trim().length > 0
+
+    ListModel {
+        id: chatMessages
+    }
 
     function connectWithInput() {
         if (userNameInput.text.trim().length === 0
@@ -989,34 +992,95 @@ Window {
         Rectangle {
             width: parent.width
             height: Math.max(120, parent.height - y - composeRow.height - parent.spacing)
-            radius: 6
-            color: "#ffffff"
-            border.color: "#c8d0d9"
+            radius: 12
+            color: "#f0f3f7"
+            border.color: "#d7dde5"
             clip: true
 
-            Flickable {
-                id: messageFlickable
+            Text {
+                anchors.centerIn: parent
+                text: qsTr("Noch keine Nachrichten")
+                color: "#7b8794"
+                font.pixelSize: 15
+                visible: chatMessages.count === 0
+            }
+
+            ListView {
+                id: messageList
                 anchors {
-                    fill: parent
-                    margins: 12
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                    margins: 16
                 }
-                contentWidth: width
-                contentHeight: Math.max(height, messageText.paintedHeight)
-                boundsBehavior: Flickable.StopAtBounds
+                height: Math.min(parent.height - 32, contentHeight)
                 clip: true
+                spacing: 4
+                model: chatMessages
+                boundsBehavior: Flickable.StopAtBounds
 
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
                 }
 
-                Text {
-                    id: messageText
-                    width: messageFlickable.width
-                    y: Math.max(0, messageFlickable.height - paintedHeight)
-                    text: receivedMessages.length > 0 ? receivedMessages : qsTr("Keine Nachrichten empfangen.")
-                    color: "#1f2933"
-                    font.pixelSize: 15
-                    wrapMode: Text.Wrap
+                delegate: Item {
+                    required property string senderName
+                    required property string messageText
+                    required property string sentAt
+                    required property bool ownMessage
+                    required property bool systemMessage
+
+                    width: messageList.width
+                    height: messageBubble.height + 8
+
+                    Rectangle {
+                        id: messageBubble
+                        anchors {
+                            right: ownMessage ? parent.right : undefined
+                            left: ownMessage ? undefined : parent.left
+                        }
+                        width: Math.min(parent.width * 0.72,
+                                        Math.max(messageBody.implicitWidth,
+                                                 ownMessage ? 0 : senderLabel.implicitWidth) + 28)
+                        height: messageContent.implicitHeight + 20
+                        radius: 14
+                        color: systemMessage ? "#fff4d6"
+                                             : ownMessage ? "#205493" : "#ffffff"
+                        border.color: systemMessage ? "#ead59a"
+                                                   : ownMessage ? "#205493" : "#d7dde5"
+
+                        Column {
+                            id: messageContent
+                            anchors {
+                                fill: parent
+                                margins: 10
+                                leftMargin: 14
+                                rightMargin: 14
+                            }
+                            spacing: 4
+
+                            Text {
+                                id: senderLabel
+                                width: parent.width
+                                text: senderName
+                                color: systemMessage ? "#806000"
+                                                     : ownMessage ? "#dcecff" : "#607080"
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                                visible: !ownMessage
+                                wrapMode: Text.Wrap
+                            }
+
+                            Text {
+                                id: messageBody
+                                width: parent.width
+                                text: messageText
+                                color: ownMessage ? "#ffffff" : "#1f2933"
+                                font.pixelSize: 15
+                                wrapMode: Text.Wrap
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1055,21 +1119,33 @@ Window {
 
         function onConnectedChanged() {
             if (!networkManager.connected) {
-                receivedMessages = ""
+                chatMessages.clear()
             }
         }
 
         function onMessageReceived(senderName, text, sentAt) {
-            receivedMessages += "[" + sentAt + "] " + senderName + ": " + text + "\n"
+            chatMessages.append({
+                "senderName": senderName,
+                "messageText": text,
+                "sentAt": sentAt,
+                "ownMessage": senderName === networkManager.userName,
+                "systemMessage": false
+            })
             Qt.callLater(function() {
-                messageFlickable.contentY = Math.max(0, messageFlickable.contentHeight - messageFlickable.height)
+                messageList.positionViewAtEnd()
             })
         }
 
         function onConnectionError(message) {
-            receivedMessages += "Error: " + message + "\n"
+            chatMessages.append({
+                "senderName": qsTr("System"),
+                "messageText": message,
+                "sentAt": "",
+                "ownMessage": false,
+                "systemMessage": true
+            })
             Qt.callLater(function() {
-                messageFlickable.contentY = Math.max(0, messageFlickable.contentHeight - messageFlickable.height)
+                messageList.positionViewAtEnd()
             })
         }
     }

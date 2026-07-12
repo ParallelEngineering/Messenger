@@ -147,17 +147,17 @@ bool ConnectionStore::startKeyPairCreation(const QString& name) {
     setErrorText({});
 
     if (!keyNameIsValid(keyName)) {
-        setErrorText(tr("Der Schlüsselname ist ungültig."));
+        setErrorText(tr("The key name is invalid."));
         return false;
     }
 
     if (!ensureKeyDirectory()) {
-        setErrorText(tr("Der Schlüsselordner konnte nicht erstellt werden."));
+        setErrorText(tr("The key directory could not be created."));
         return false;
     }
 
     if (keyExists(keyName)) {
-        setErrorText(tr("Ein Schlüssel mit diesem Namen existiert bereits."));
+        setErrorText(tr("A key with this name already exists."));
         return false;
     }
 
@@ -211,13 +211,13 @@ void ConnectionStore::finishKeyPairCreation(const QString& keyName, const QByteA
 
     if (!discarded && workerError.isEmpty()) {
         if (keyExists(keyName)) {
-            setErrorText(tr("Ein Schlüssel mit diesem Namen existiert bereits."));
+            setErrorText(tr("A key with this name already exists."));
         } else {
             QFile publicKeyFile(publicKeyPath(keyName));
             if (!publicKeyFile.open(QIODevice::WriteOnly | QIODevice::NewOnly) ||
                 publicKeyFile.write(publicKeyBytes) != publicKeyBytes.size()) {
                 publicKeyFile.remove();
-                setErrorText(tr("Der öffentliche Schlüssel konnte nicht gespeichert werden."));
+                setErrorText(tr("The public key could not be saved."));
             } else {
                 publicKeyFile.close();
                 QFile privateKeyFile(privateKeyPath(keyName));
@@ -225,7 +225,7 @@ void ConnectionStore::finishKeyPairCreation(const QString& keyName, const QByteA
                     privateKeyFile.write(privateKeyBytes) != privateKeyBytes.size()) {
                     privateKeyFile.remove();
                     QFile::remove(publicKeyPath(keyName));
-                    setErrorText(tr("Der private Schlüssel konnte nicht gespeichert werden."));
+                    setErrorText(tr("The private key could not be saved."));
                 } else {
                     privateKeyFile.close();
                     refreshAvailableKeyNames();
@@ -234,7 +234,7 @@ void ConnectionStore::finishKeyPairCreation(const QString& keyName, const QByteA
             }
         }
     } else if (!discarded) {
-        setErrorText(tr("Das Schlüsselpaar konnte nicht erstellt werden: %1").arg(workerError));
+        setErrorText(tr("The key pair could not be created: %1").arg(workerError));
     }
 
     if (discardGeneratedKey_ == discardGeneratedKey) {
@@ -249,19 +249,19 @@ bool ConnectionStore::deleteKeyPair(const QString& name) {
     setErrorText({});
 
     if (keyGenerationInProgress_) {
-        setErrorText(tr("Während der Schlüsselerstellung kann kein Schlüssel gelöscht werden."));
+        setErrorText(tr("Keys cannot be deleted while a key is being generated."));
         return false;
     }
 
     if (!availableKeyNames_.contains(keyName)) {
-        setErrorText(tr("Der Schlüssel wurde nicht gefunden."));
+        setErrorText(tr("The key was not found."));
         return false;
     }
 
     const auto publicRemoved = QFile::remove(publicKeyPath(keyName));
     const auto privateRemoved = QFile::remove(privateKeyPath(keyName));
     if (!publicRemoved || !privateRemoved) {
-        setErrorText(tr("Der Schlüssel konnte nicht vollständig gelöscht werden."));
+        setErrorText(tr("The key could not be deleted completely."));
         refreshAvailableKeyNames();
         clearInvalidSelectedKey();
         return false;
@@ -290,7 +290,7 @@ bool ConnectionStore::saveLastConnection(const QString& host,
 
     if (trimmedHost.isEmpty() || trimmedUserName.isEmpty() || port < 1 || port > 65535 ||
         !availableKeyNames_.contains(trimmedKeyName)) {
-        setErrorText(tr("Die Verbindungsdaten sind unvollständig."));
+        setErrorText(tr("The connection details are incomplete."));
         return false;
     }
 
@@ -303,7 +303,7 @@ bool ConnectionStore::saveLastConnection(const QString& host,
 
     const auto settingsFileInfo = QFileInfo(settingsFilePath());
     if (!settingsFileInfo.absoluteDir().exists() && !QDir().mkpath(settingsFileInfo.absolutePath())) {
-        setErrorText(tr("Der Speicherordner konnte nicht erstellt werden."));
+        setErrorText(tr("The storage directory could not be created."));
         return false;
     }
 
@@ -315,13 +315,13 @@ bool ConnectionStore::saveLastConnection(const QString& host,
 
     QSaveFile settingsFile(settingsFilePath());
     if (!settingsFile.open(QIODevice::WriteOnly)) {
-        setErrorText(tr("Die letzten Verbindungsdaten konnten nicht gespeichert werden."));
+        setErrorText(tr("The most recent connection details could not be saved."));
         return false;
     }
 
     settingsFile.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
     if (!settingsFile.commit()) {
-        setErrorText(tr("Die letzten Verbindungsdaten konnten nicht geschrieben werden."));
+        setErrorText(tr("The most recent connection details could not be written."));
         return false;
     }
 
@@ -380,14 +380,14 @@ QString ConnectionStore::privateKeyPath(const QString& keyName) const {
 std::optional<keyPair> ConnectionStore::loadKeyPair(const QString& keyName) {
     QFile publicKeyFile(publicKeyPath(keyName));
     if (!publicKeyFile.open(QIODevice::ReadOnly)) {
-        setErrorText(tr("Der öffentliche Schlüssel konnte nicht eingelesen werden."));
+        setErrorText(tr("The public key could not be read."));
         return std::nullopt;
     }
     const auto publicKeyBytes = toByteVector(publicKeyFile.readAll());
 
     QFile privateKeyFile(privateKeyPath(keyName));
     if (!privateKeyFile.open(QIODevice::ReadOnly)) {
-        setErrorText(tr("Der private Schlüssel konnte nicht eingelesen werden."));
+        setErrorText(tr("The private key could not be read."));
         return std::nullopt;
     }
     const auto privateKeyBytes = toByteVector(privateKeyFile.readAll());
@@ -395,7 +395,7 @@ std::optional<keyPair> ConnectionStore::loadKeyPair(const QString& keyName) {
     try {
         return keyPair::create(publicKeyBytes, privateKeyBytes);
     } catch (const std::exception&) {
-        setErrorText(tr("Das Schlüsselpaar konnte nicht deserialisiert werden."));
+        setErrorText(tr("The key pair could not be deserialized."));
         return std::nullopt;
     }
 }

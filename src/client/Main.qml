@@ -261,7 +261,7 @@ Window {
                 spacing: 8
 
                 FieldLabel {
-                    text: qsTr("RSA-Schlüssel")
+                    text: qsTr("RSA Key")
                 }
 
                 Row {
@@ -418,8 +418,8 @@ Window {
 
             ActionButton {
                 width: parent.width
-                text: qsTr("Verbinden")
-                enabledState: connectionInputValid
+                text: networkManager.busy ? qsTr("Authenticating ...") : qsTr("Connect")
+                enabledState: connectionInputValid && !networkManager.busy
                 onClicked: connectWithInput()
             }
         }
@@ -531,7 +531,7 @@ Window {
 
                     Text {
                         width: Math.max(120, parent.width - closeKeyManagementButton.width - parent.spacing)
-                        text: qsTr("RSA-Schlüssel")
+                        text: qsTr("RSA Keys")
                         color: "#1f2933"
                         font.pixelSize: 22
                         verticalAlignment: Text.AlignVCenter
@@ -566,7 +566,7 @@ Window {
                     Text {
                         anchors.centerIn: parent
                         width: parent.width
-                        text: qsTr("Noch keine RSA-Schlüssel vorhanden.")
+                        text: qsTr("No RSA keys available yet.")
                         color: "#607080"
                         font.pixelSize: 14
                         horizontalAlignment: Text.AlignHCenter
@@ -619,7 +619,7 @@ Window {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: qsTr("Löschen")
+                                    text: qsTr("Delete")
                                     color: "#7a2830"
                                     font.pixelSize: 13
                                 }
@@ -652,7 +652,7 @@ Window {
                     visible: !connectionStore.keyGenerationInProgress
 
                     FieldLabel {
-                        text: qsTr("Neuer Schlüssel")
+                        text: qsTr("New Key")
                     }
 
                     Row {
@@ -668,7 +668,7 @@ Window {
                         ActionButton {
                             id: createManagedKeyButton
                             width: 112
-                            text: qsTr("Erstellen")
+                            text: qsTr("Create")
                             enabledState: newKeyNameInput.text.trim().length > 0
                             onClicked: keyManagementPopup.submit()
                         }
@@ -683,7 +683,7 @@ Window {
 
                     FieldLabel {
                         width: parent.width
-                        text: qsTr("Schlüsselerzeugung...")
+                        text: qsTr("Generating key ...")
                         elide: Text.ElideRight
                     }
 
@@ -734,7 +734,7 @@ Window {
                             id: cancelKeyGenerationButton
                             anchors.right: parent.right
                             width: 112
-                            text: qsTr("Abbrechen")
+                            text: qsTr("Cancel")
                             normalColor: "#ffffff"
                             hoverColor: "#f7f8fa"
                             borderColor: "#c8d0d9"
@@ -846,7 +846,7 @@ Window {
 
                 Text {
                     width: parent.width
-                    text: qsTr("Schlüssel löschen")
+                    text: qsTr("Delete Key")
                     color: "#1f2933"
                     font.pixelSize: 22
                     elide: Text.ElideRight
@@ -854,7 +854,7 @@ Window {
 
                 Text {
                     width: parent.width
-                    text: qsTr("Der RSA-Schlüssel \"%1\" kann nicht wiederhergestellt werden. Eine Verbindung zum Server unter diesem Benutzer ist anschließend nicht mehr möglich.").arg(pendingDeleteKeyName)
+                    text: qsTr("The RSA key \"%1\" cannot be recovered. After deletion, connecting to the server as this user will no longer be possible.").arg(pendingDeleteKeyName)
                     color: "#43515f"
                     font.pixelSize: 14
                     wrapMode: Text.Wrap
@@ -881,7 +881,7 @@ Window {
 
                     QuietButton {
                         width: Math.max(120, (parent.width - parent.spacing) / 2)
-                        text: qsTr("Abbrechen")
+                        text: qsTr("Cancel")
                         normalColor: "#ffffff"
                         hoverColor: "#f7f8fa"
                         borderColor: "#c8d0d9"
@@ -891,7 +891,7 @@ Window {
 
                     QuietButton {
                         width: Math.max(120, (parent.width - parent.spacing) / 2)
-                        text: qsTr("Löschen")
+                        text: qsTr("Delete")
                         normalColor: "#f3e7e8"
                         hoverColor: "#ead8da"
                         borderColor: "#ddb9bd"
@@ -999,7 +999,7 @@ Window {
 
             Text {
                 anchors.centerIn: parent
-                text: qsTr("Noch keine Nachrichten")
+                text: qsTr("No messages yet")
                 color: "#7b8794"
                 font.pixelSize: 15
                 visible: chatMessages.count === 0
@@ -1104,7 +1104,7 @@ Window {
             ActionButton {
                 id: sendButton
                 width: 140
-                text: qsTr("Senden")
+                text: qsTr("Send")
                 enabledState: networkManager.connected && messageInput.text.length > 0
                 onClicked: {
                     networkManager.sendChatMessage(messageInput.text)
@@ -1137,6 +1137,9 @@ Window {
         }
 
         function onConnectionError(message) {
+            if (!networkManager.connected) {
+                return
+            }
             chatMessages.append({
                 "senderName": qsTr("System"),
                 "messageText": message,

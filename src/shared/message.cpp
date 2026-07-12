@@ -35,11 +35,8 @@ QDataStream& operator>>(QDataStream& in, Message& message) {
     return in;
 }
 
-QByteArray authenticationTranscript(
-    const QString& userName,
-    const QByteArray& authenticationId,
-    const QByteArray& clientNonce,
-    const QByteArray& serverNonce) {
+QByteArray authenticationTranscript(const QString& userName, const QByteArray& authenticationId,
+                                    const QByteArray& clientNonce, const QByteArray& serverNonce) {
     QByteArray transcript;
     QDataStream stream(&transcript, QIODevice::WriteOnly);
     stream.setVersion(DataStreamVersion);

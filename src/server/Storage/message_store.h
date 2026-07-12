@@ -1,13 +1,12 @@
 #ifndef MESSENGER_MESSAGE_STORE_H
 #define MESSENGER_MESSAGE_STORE_H
 
-#include "message.h"
-
 #include <QByteArray>
 #include <QList>
 #include <QString>
-
 #include <optional>
+
+#include "message.h"
 
 struct UserAuthenticationRecord {
     int userId;
@@ -56,10 +55,9 @@ class MessageStore {
     bool hasUser(const QString& userName) const;
     [[nodiscard]] std::optional<UserAuthenticationRecord> findUserForAuthentication(
         const QString& userName) const;
-    [[nodiscard]] RegistrationRequestResult requestRegistration(
-        const QString& userName,
-        const QByteArray& publicKey,
-        const QString& sourceAddress) const;
+    [[nodiscard]] RegistrationRequestResult requestRegistration(const QString& userName,
+                                                                const QByteArray& publicKey,
+                                                                const QString& sourceAddress) const;
     [[nodiscard]] QList<RegistrationRequest> pendingRegistrationRequests() const;
     bool approveRegistrationRequest(qint64 requestId) const;
     bool rejectRegistrationRequest(qint64 requestId) const;

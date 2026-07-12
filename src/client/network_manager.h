@@ -1,16 +1,14 @@
 #ifndef MESSENGER_NETWORK_MANAGER_H
 #define MESSENGER_NETWORK_MANAGER_H
 
-#include "message.h"
-
 #include <QDataStream>
 #include <QObject>
 #include <QTcpSocket>
 #include <QTimer>
-
 #include <optional>
 
 #include "keyPair.h"
+#include "message.h"
 
 class ConnectionStore;
 

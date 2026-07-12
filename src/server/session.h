@@ -1,13 +1,13 @@
 #ifndef MESSENGER_SESSION_H
 #define MESSENGER_SESSION_H
 
-#include "message.h"
-#include "keyPair.h"
-
 #include <QDataStream>
 #include <QDeadlineTimer>
 #include <QObject>
 #include <QTimer>
+
+#include "keyPair.h"
+#include "message.h"
 
 class QTcpSocket;
 
@@ -25,16 +25,13 @@ class Session final : public QObject {
     explicit Session(QTcpSocket* socket, QObject* parent = nullptr);
 
     void sendMessage(const messenger::protocol::Message& message);
-    void beginAuthentication(int userId,
-                             const QString& userName,
-                             const PublicKey& publicKey,
-                             const QByteArray& authenticationId,
-                             const QByteArray& clientNonce,
+    void beginAuthentication(int userId, const QString& userName, const PublicKey& publicKey,
+                             const QByteArray& authenticationId, const QByteArray& clientNonce,
                              const QByteArray& serverNonce);
     void completeAuthentication();
-    void rejectAuthentication(
-        const QString& reason = QStringLiteral("Authentication failed."),
-        messenger::protocol::MessageType messageType = messenger::protocol::MessageType::AuthFailure);
+    void rejectAuthentication(const QString& reason = QStringLiteral("Authentication failed."),
+                              messenger::protocol::MessageType messageType =
+                                  messenger::protocol::MessageType::AuthFailure);
     void disconnectFromHost();
 
     [[nodiscard]] AuthenticationState authenticationState() const;

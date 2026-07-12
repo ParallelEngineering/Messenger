@@ -1,9 +1,9 @@
 #ifndef MESSENGER_MESSAGE_H
 #define MESSENGER_MESSAGE_H
 
+#include <QByteArray>
 #include <QDataStream>
 #include <QDateTime>
-#include <QByteArray>
 #include <QString>
 #include <QtGlobal>
 
@@ -48,11 +48,10 @@ struct Message {
 QDataStream& operator<<(QDataStream& out, const Message& message);
 QDataStream& operator>>(QDataStream& in, Message& message);
 
-[[nodiscard]] QByteArray authenticationTranscript(
-    const QString& userName,
-    const QByteArray& authenticationId,
-    const QByteArray& clientNonce,
-    const QByteArray& serverNonce);
+[[nodiscard]] QByteArray authenticationTranscript(const QString& userName,
+                                                  const QByteArray& authenticationId,
+                                                  const QByteArray& clientNonce,
+                                                  const QByteArray& serverNonce);
 
 [[nodiscard]] QByteArray generateSecureRandomBytes(qsizetype size);
 

@@ -1,22 +1,21 @@
 #include "connection_store.h"
 
-#include "keyPair.h"
-#include "message.h"
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
 #include <QMetaObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
-
 #include <exception>
 #include <utility>
 #include <vector>
+
+#include "keyPair.h"
+#include "message.h"
 
 namespace {
 
@@ -26,7 +25,8 @@ constexpr auto PublicKeySuffix = ".public.rsa";
 constexpr auto PrivateKeySuffix = ".private.rsa";
 
 QByteArray toByteArray(const std::vector<uint8_t>& bytes) {
-    return QByteArray(reinterpret_cast<const char*>(bytes.data()), static_cast<qsizetype>(bytes.size()));
+    return QByteArray(reinterpret_cast<const char*>(bytes.data()),
+                      static_cast<qsizetype>(bytes.size()));
 }
 
 std::vector<uint8_t> toByteVector(const QByteArray& bytes) {
@@ -46,37 +46,23 @@ ConnectionStore::ConnectionStore(QObject* parent)
     clearInvalidSelectedKey();
 }
 
-ConnectionStore::~ConnectionStore() {
-    cancelKeyPairCreation();
-}
+ConnectionStore::~ConnectionStore() { cancelKeyPairCreation(); }
 
-QString ConnectionStore::host() const {
-    return host_;
-}
+QString ConnectionStore::host() const { return host_; }
 
-int ConnectionStore::port() const {
-    return port_;
-}
+int ConnectionStore::port() const { return port_; }
 
-QString ConnectionStore::userName() const {
-    return userName_;
-}
+QString ConnectionStore::userName() const { return userName_; }
 
-QString ConnectionStore::selectedKeyName() const {
-    return selectedKeyName_;
-}
+QString ConnectionStore::selectedKeyName() const { return selectedKeyName_; }
 
 const keyPair* ConnectionStore::currentKeyPair() const {
     return currentKeyPair_ ? &*currentKeyPair_ : nullptr;
 }
 
-QStringList ConnectionStore::availableKeyNames() const {
-    return availableKeyNames_;
-}
+QStringList ConnectionStore::availableKeyNames() const { return availableKeyNames_; }
 
-QString ConnectionStore::errorText() const {
-    return errorText_;
-}
+QString ConnectionStore::errorText() const { return errorText_; }
 
 bool ConnectionStore::keyGenerationInProgress() const { return keyGenerationInProgress_; }
 
@@ -185,13 +171,16 @@ bool ConnectionStore::startKeyPairCreation(const QString& name) {
         }
         if (!guardedThis) return;
         const auto discarded = discardGeneratedKey->load(std::memory_order_relaxed);
-        QMetaObject::invokeMethod(guardedThis, [guardedThis, keyName, publicBytes, privateBytes, error,
-                                                discarded, discardGeneratedKey]() {
-            if (guardedThis) {
-                guardedThis->finishKeyPairCreation(keyName, publicBytes, privateBytes, error,
-                                                   discarded, discardGeneratedKey);
-            }
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            guardedThis,
+            [guardedThis, keyName, publicBytes, privateBytes, error, discarded,
+             discardGeneratedKey]() {
+                if (guardedThis) {
+                    guardedThis->finishKeyPairCreation(keyName, publicBytes, privateBytes, error,
+                                                       discarded, discardGeneratedKey);
+                }
+            },
+            Qt::QueuedConnection);
     });
     return true;
 }
@@ -203,10 +192,10 @@ void ConnectionStore::cancelKeyPairCreation() {
     emit keyGenerationInProgressChanged();
 }
 
-void ConnectionStore::finishKeyPairCreation(const QString& keyName, const QByteArray& publicKeyBytes,
-                                            const QByteArray& privateKeyBytes, const QString& workerError,
-                                            bool discarded,
-                                            const std::shared_ptr<std::atomic_bool>& discardGeneratedKey) {
+void ConnectionStore::finishKeyPairCreation(
+    const QString& keyName, const QByteArray& publicKeyBytes, const QByteArray& privateKeyBytes,
+    const QString& workerError, bool discarded,
+    const std::shared_ptr<std::atomic_bool>& discardGeneratedKey) {
     discarded = discarded || discardGeneratedKey->load(std::memory_order_relaxed);
 
     if (!discarded && workerError.isEmpty()) {
@@ -275,14 +264,10 @@ bool ConnectionStore::deleteKeyPair(const QString& name) {
     return true;
 }
 
-void ConnectionStore::clearErrorText() {
-    setErrorText({});
-}
+void ConnectionStore::clearErrorText() { setErrorText({}); }
 
-bool ConnectionStore::saveLastConnection(const QString& host,
-                                               int port,
-                                               const QString& userName,
-                                               const QString& selectedKeyName) {
+bool ConnectionStore::saveLastConnection(const QString& host, int port, const QString& userName,
+                                         const QString& selectedKeyName) {
     const auto trimmedHost = host.trimmed();
     const auto trimmedUserName = userName.trimmed();
     const auto trimmedKeyName = selectedKeyName.trimmed();
@@ -302,7 +287,8 @@ bool ConnectionStore::saveLastConnection(const QString& host,
     }
 
     const auto settingsFileInfo = QFileInfo(settingsFilePath());
-    if (!settingsFileInfo.absoluteDir().exists() && !QDir().mkpath(settingsFileInfo.absolutePath())) {
+    if (!settingsFileInfo.absoluteDir().exists() &&
+        !QDir().mkpath(settingsFileInfo.absolutePath())) {
         setErrorText(tr("The storage directory could not be created."));
         return false;
     }
@@ -361,8 +347,8 @@ bool ConnectionStore::ensureKeyDirectory() {
 bool ConnectionStore::keyNameIsValid(const QString& keyName) const {
     static const QRegularExpression invalidCharacters(QStringLiteral(R"([\\/:*?"<>|\x00-\x1F])"));
 
-    return !keyName.isEmpty() && keyName != QStringLiteral(".") && keyName != QStringLiteral("..") &&
-           !keyName.contains(invalidCharacters);
+    return !keyName.isEmpty() && keyName != QStringLiteral(".") &&
+           keyName != QStringLiteral("..") && !keyName.contains(invalidCharacters);
 }
 
 bool ConnectionStore::keyExists(const QString& keyName) const {
@@ -402,9 +388,9 @@ std::optional<keyPair> ConnectionStore::loadKeyPair(const QString& keyName) {
 
 void ConnectionStore::refreshAvailableKeyNames() {
     const QDir keyDirectory(keyDirectoryPath());
-    const auto publicKeyFiles = keyDirectory.entryList({QStringLiteral("*") + QString::fromLatin1(PublicKeySuffix)},
-                                                       QDir::Files,
-                                                       QDir::Name | QDir::IgnoreCase);
+    const auto publicKeyFiles =
+        keyDirectory.entryList({QStringLiteral("*") + QString::fromLatin1(PublicKeySuffix)},
+                               QDir::Files, QDir::Name | QDir::IgnoreCase);
 
     QStringList keyNames;
     for (const auto& publicKeyFile : publicKeyFiles) {

@@ -1,27 +1,28 @@
 #ifndef MESSENGER_CONNECTION_STORE_H
 #define MESSENGER_CONNECTION_STORE_H
 
-#include "keyPair.h"
-
 #include <QObject>
 #include <QString>
 #include <QStringList>
-
-#include <optional>
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
+
+#include "keyPair.h"
 
 class ConnectionStore final : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString host READ host WRITE setHost NOTIFY hostChanged)
     Q_PROPERTY(int port READ port WRITE setPort NOTIFY portChanged)
     Q_PROPERTY(QString userName READ userName WRITE setUserName NOTIFY userNameChanged)
-    Q_PROPERTY(QString selectedKeyName READ selectedKeyName WRITE setSelectedKeyName NOTIFY selectedKeyNameChanged)
+    Q_PROPERTY(QString selectedKeyName READ selectedKeyName WRITE setSelectedKeyName NOTIFY
+                   selectedKeyNameChanged)
     Q_PROPERTY(QStringList availableKeyNames READ availableKeyNames NOTIFY availableKeyNamesChanged)
     Q_PROPERTY(QString errorText READ errorText NOTIFY errorTextChanged)
-    Q_PROPERTY(bool keyGenerationInProgress READ keyGenerationInProgress NOTIFY keyGenerationInProgressChanged)
+    Q_PROPERTY(bool keyGenerationInProgress READ keyGenerationInProgress NOTIFY
+                   keyGenerationInProgressChanged)
 
    public:
     explicit ConnectionStore(QObject* parent = nullptr);
@@ -45,9 +46,7 @@ class ConnectionStore final : public QObject {
     Q_INVOKABLE void cancelKeyPairCreation();
     Q_INVOKABLE bool deleteKeyPair(const QString& name);
     Q_INVOKABLE void clearErrorText();
-    Q_INVOKABLE bool saveLastConnection(const QString& host,
-                                        int port,
-                                        const QString& userName,
+    Q_INVOKABLE bool saveLastConnection(const QString& host, int port, const QString& userName,
                                         const QString& selectedKeyName);
 
    signals:

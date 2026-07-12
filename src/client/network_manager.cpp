@@ -1,16 +1,15 @@
 #include "network_manager.h"
 
-#include "connection_store.h"
-#include "signature.h"
-
 #include <QAbstractSocket>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QTimer>
 #include <QtGlobal>
-
 #include <cstdint>
 #include <vector>
+
+#include "connection_store.h"
+#include "signature.h"
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DataStreamVersion;
@@ -63,17 +62,11 @@ bool NetworkManager::busy() const {
     return connectionState_ != ConnectionState::Disconnected && !connected();
 }
 
-QString NetworkManager::statusText() const {
-    return statusText_;
-}
+QString NetworkManager::statusText() const { return statusText_; }
 
-QString NetworkManager::userName() const {
-    return userName_;
-}
+QString NetworkManager::userName() const { return userName_; }
 
-int NetworkManager::defaultPort() const {
-    return DefaultPort;
-}
+int NetworkManager::defaultPort() const { return DefaultPort; }
 
 void NetworkManager::setUserName(const QString& userName) {
     const auto trimmedUserName = userName.trimmed();
@@ -210,7 +203,8 @@ void NetworkManager::readAvailable() {
         }
 
         if (message.protocolVersion != CurrentProtocolVersion) {
-            const auto errorMessage = tr("Unsupported protocol version: %1").arg(message.protocolVersion);
+            const auto errorMessage =
+                tr("Unsupported protocol version: %1").arg(message.protocolVersion);
             setStatusText(errorMessage);
             emit connectionError(errorMessage);
             socket_.disconnectFromHost();
@@ -224,13 +218,12 @@ void NetworkManager::readAvailable() {
             } else if (messageType == MessageType::AuthSuccess) {
                 handleAuthenticationSuccess(message);
             } else if (messageType == MessageType::AuthFailure) {
-                failAuthentication(message.text.isEmpty()
-                                       ? tr("Authentication failed.")
-                                       : message.text);
+                failAuthentication(message.text.isEmpty() ? tr("Authentication failed.")
+                                                          : message.text);
             } else if (messageType == MessageType::RegistrationPending) {
-                failAuthentication(tr(
-                    "You do not have access yet. A registration request was created and must "
-                    "be approved on the server. Please try again afterwards."));
+                failAuthentication(
+                    tr("You do not have access yet. A registration request was created and must "
+                       "be approved on the server. Please try again afterwards."));
             } else if (messageType == MessageType::RegistrationRejected) {
                 failAuthentication(tr("Your registration request was rejected on the server."));
             } else {
@@ -239,9 +232,8 @@ void NetworkManager::readAvailable() {
             continue;
         }
 
-        if (messageType != MessageType::ChatMessage
-            && messageType != MessageType::SystemMessage
-            && messageType != MessageType::ErrorMessage) {
+        if (messageType != MessageType::ChatMessage && messageType != MessageType::SystemMessage &&
+            messageType != MessageType::ErrorMessage) {
             const auto errorMessage = tr("Server sent an unexpected message.");
             setStatusText(errorMessage);
             emit connectionError(errorMessage);
@@ -249,8 +241,7 @@ void NetworkManager::readAvailable() {
             return;
         }
 
-        emit messageReceived(message.senderName,
-                             message.text,
+        emit messageReceived(message.senderName, message.text,
                              message.timestamp.toLocalTime().toString(QStringLiteral("HH:mm")));
     }
 }
@@ -303,9 +294,9 @@ void NetworkManager::sendAuthenticationHello() {
 }
 
 void NetworkManager::handleAuthenticationChallenge(const Message& message) {
-    if (connectionState_ != ConnectionState::AwaitingChallenge
-        || message.authenticationId.size() != messenger::protocol::AuthenticationIdSize
-        || message.serverNonce.size() != messenger::protocol::AuthenticationNonceSize) {
+    if (connectionState_ != ConnectionState::AwaitingChallenge ||
+        message.authenticationId.size() != messenger::protocol::AuthenticationIdSize ||
+        message.serverNonce.size() != messenger::protocol::AuthenticationNonceSize) {
         failAuthentication(tr("The server sent an invalid authentication challenge."));
         return;
     }
@@ -316,16 +307,15 @@ void NetworkManager::handleAuthenticationChallenge(const Message& message) {
     setStatusText(tr("Challenge received. Signing authentication proof ..."));
 
     QTimer::singleShot(0, this, [this]() {
-        if (connectionState_ != ConnectionState::SigningChallenge
-            || !authenticationKeyPair_) {
+        if (connectionState_ != ConnectionState::SigningChallenge || !authenticationKeyPair_) {
             return;
         }
 
         const auto transcript = messenger::protocol::authenticationTranscript(
             authenticationUserName_, authenticationId_, clientNonce_, serverNonce_);
         const auto digest = QCryptographicHash::hash(transcript, QCryptographicHash::Sha256);
-        const auto signature = core::signature::signDigest(
-            authenticationKeyPair_->getPrivateKey(), toByteVector(digest));
+        const auto signature = core::signature::signDigest(authenticationKeyPair_->getPrivateKey(),
+                                                           toByteVector(digest));
         if (signature.empty()) {
             failAuthentication(tr("The RSA authentication proof could not be created."));
             return;
@@ -352,8 +342,7 @@ void NetworkManager::handleAuthenticationSuccess(const Message& message) {
     }
 
     authenticationTimer_.stop();
-    if (!message.senderName.trimmed().isEmpty()
-        && userName_ != message.senderName.trimmed()) {
+    if (!message.senderName.trimmed().isEmpty() && userName_ != message.senderName.trimmed()) {
         userName_ = message.senderName.trimmed();
         emit userNameChanged();
     }

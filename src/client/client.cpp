@@ -1,13 +1,13 @@
 #include "client.h"
 
-#include "connection_store.h"
-#include "network_manager.h"
-
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+
+#include "connection_store.h"
+#include "network_manager.h"
 
 client& client::getInstance() {
     static client instance;

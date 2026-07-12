@@ -1,13 +1,13 @@
 #ifndef MESSENGER_SERVER_H
 #define MESSENGER_SERVER_H
 
-#include "message.h"
-#include "Storage/message_store.h"
-
 #include <QAbstractSocket>
 #include <QObject>
 #include <QSet>
 #include <QTcpServer>
+
+#include "Storage/message_store.h"
+#include "message.h"
 
 class Session;
 class QHostAddress;

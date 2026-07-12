@@ -10,7 +10,6 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
-
 #include <optional>
 
 using messenger::protocol::CurrentProtocolVersion;
@@ -21,9 +20,7 @@ namespace {
 
 constexpr auto InvalidUserId = -1;
 
-QString lastErrorText(const QSqlQuery& query) {
-    return query.lastError().text();
-}
+QString lastErrorText(const QSqlQuery& query) { return query.lastError().text(); }
 
 QList<QString> splitSqlStatements(const QString& script) {
     QList<QString> statements;
@@ -43,7 +40,8 @@ QList<QString> splitSqlStatements(const QString& script) {
             continue;
         }
 
-        if (!inSingleQuote && !inDoubleQuote && currentChar == QLatin1Char('-') && nextChar == QLatin1Char('-')) {
+        if (!inSingleQuote && !inDoubleQuote && currentChar == QLatin1Char('-') &&
+            nextChar == QLatin1Char('-')) {
             inLineComment = true;
             ++i;
             continue;
@@ -77,8 +75,7 @@ QList<QString> splitSqlStatements(const QString& script) {
 
 }  // namespace
 
-MessageStore::MessageStore()
-    : connectionName_(QStringLiteral("messenger_server_storage")) {}
+MessageStore::MessageStore() : connectionName_(QStringLiteral("messenger_server_storage")) {}
 
 MessageStore::~MessageStore() {
     if (QCoreApplication::instance() == nullptr) {
@@ -194,13 +191,13 @@ QList<Message> MessageStore::loadMessages() const {
         message.senderName = query.value(QStringLiteral("username")).toString();
         const auto storedMessageType = query.value(QStringLiteral("message_type")).toUInt();
         switch (storedMessageType) {
-            case 1: // Protocol version 1 ChatMessage
+            case 1:  // Protocol version 1 ChatMessage
                 message.messageType = static_cast<quint32>(MessageType::ChatMessage);
                 break;
-            case 2: // Protocol version 1 SystemMessage
+            case 2:  // Protocol version 1 SystemMessage
                 message.messageType = static_cast<quint32>(MessageType::SystemMessage);
                 break;
-            case 3: // Protocol version 1 ErrorMessage
+            case 3:  // Protocol version 1 ErrorMessage
                 message.messageType = static_cast<quint32>(MessageType::ErrorMessage);
                 break;
             case static_cast<quint32>(MessageType::ChatMessage):
@@ -209,13 +206,12 @@ QList<Message> MessageStore::loadMessages() const {
                 message.messageType = storedMessageType;
                 break;
             default:
-                qWarning() << "Skipping stored message with unsupported type"
-                           << storedMessageType;
+                qWarning() << "Skipping stored message with unsupported type" << storedMessageType;
                 continue;
         }
         message.text = query.value(QStringLiteral("body")).toString();
-        message.timestamp = QDateTime::fromString(query.value(QStringLiteral("client_timestamp")).toString(),
-                                                  Qt::ISODateWithMs);
+        message.timestamp = QDateTime::fromString(
+            query.value(QStringLiteral("client_timestamp")).toString(), Qt::ISODateWithMs);
         if (!message.timestamp.isValid()) {
             message.timestamp = QDateTime::currentDateTimeUtc();
         }
@@ -237,8 +233,8 @@ std::optional<UserAuthenticationRecord> MessageStore::findUserForAuthentication(
     }
 
     QSqlQuery query(QSqlDatabase::database(connectionName_));
-    query.prepare(QStringLiteral(
-        "SELECT id, username, public_key FROM users WHERE username = :username"));
+    query.prepare(
+        QStringLiteral("SELECT id, username, public_key FROM users WHERE username = :username"));
     query.bindValue(QStringLiteral(":username"), userName.trimmed());
 
     if (!query.exec()) {
@@ -257,10 +253,9 @@ std::optional<UserAuthenticationRecord> MessageStore::findUserForAuthentication(
     };
 }
 
-RegistrationRequestResult MessageStore::requestRegistration(
-    const QString& userName,
-    const QByteArray& publicKey,
-    const QString& sourceAddress) const {
+RegistrationRequestResult MessageStore::requestRegistration(const QString& userName,
+                                                            const QByteArray& publicKey,
+                                                            const QString& sourceAddress) const {
     if (!initialized_) {
         return {};
     }
@@ -281,9 +276,8 @@ RegistrationRequestResult MessageStore::requestRegistration(
     if (existingQuery.next()) {
         const auto status = existingQuery.value(QStringLiteral("status")).toString();
         return {
-            status == QStringLiteral("rejected")
-                ? RegistrationRequestResult::Status::Rejected
-                : RegistrationRequestResult::Status::Pending,
+            status == QStringLiteral("rejected") ? RegistrationRequestResult::Status::Rejected
+                                                 : RegistrationRequestResult::Status::Pending,
             existingQuery.value(QStringLiteral("id")).toLongLong(),
         };
     }
@@ -606,8 +600,10 @@ bool MessageStore::runMigrations() {
         return false;
     }
 
-    const QDir migrationsDirectory(QCoreApplication::applicationDirPath() + QStringLiteral("/Migrations"));
-    const auto migrationFiles = migrationsDirectory.entryList({QStringLiteral("*.sql")}, QDir::Files, QDir::Name);
+    const QDir migrationsDirectory(QCoreApplication::applicationDirPath() +
+                                   QStringLiteral("/Migrations"));
+    const auto migrationFiles =
+        migrationsDirectory.entryList({QStringLiteral("*.sql")}, QDir::Files, QDir::Name);
 
     if (migrationFiles.isEmpty()) {
         qWarning() << "No database migrations found in" << migrationsDirectory.absolutePath();
@@ -618,10 +614,12 @@ bool MessageStore::runMigrations() {
         const auto version = migrationFile.section(QLatin1Char('_'), 0, 0);
 
         QSqlQuery appliedQuery(database);
-        appliedQuery.prepare(QStringLiteral("SELECT COUNT(*) FROM schema_migrations WHERE version = :version"));
+        appliedQuery.prepare(
+            QStringLiteral("SELECT COUNT(*) FROM schema_migrations WHERE version = :version"));
         appliedQuery.bindValue(QStringLiteral(":version"), version);
         if (!appliedQuery.exec() || !appliedQuery.next()) {
-            qWarning() << "Could not check migration state for" << migrationFile << lastErrorText(appliedQuery);
+            qWarning() << "Could not check migration state for" << migrationFile
+                       << lastErrorText(appliedQuery);
             return false;
         }
 
@@ -656,13 +654,15 @@ bool MessageStore::runMigrations() {
                               QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
 
         if (!insertQuery.exec()) {
-            qWarning() << "Could not record migration" << migrationFile << lastErrorText(insertQuery);
+            qWarning() << "Could not record migration" << migrationFile
+                       << lastErrorText(insertQuery);
             database.rollback();
             return false;
         }
 
         if (!database.commit()) {
-            qWarning() << "Could not commit migration" << migrationFile << database.lastError().text();
+            qWarning() << "Could not commit migration" << migrationFile
+                       << database.lastError().text();
             database.rollback();
             return false;
         }

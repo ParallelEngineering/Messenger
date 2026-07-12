@@ -1,21 +1,20 @@
 #include "server.h"
 
-#include "session.h"
-#include "keyPair.h"
-#include "signature.h"
-
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QHostAddress>
 #include <QTcpSocket>
 #include <QtAlgorithms>
-
-#include <utility>
 #include <cstdint>
 #include <exception>
 #include <optional>
+#include <utility>
 #include <vector>
+
+#include "keyPair.h"
+#include "session.h"
+#include "signature.h"
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DefaultPort;
@@ -25,9 +24,9 @@ using messenger::protocol::MessageType;
 namespace {
 
 bool isValidChatMessage(const Message& message) {
-    return message.messageType == static_cast<quint32>(MessageType::ChatMessage)
-           && !message.text.trimmed().isEmpty()
-           && message.text.size() <= messenger::protocol::MaximumMessageSize;
+    return message.messageType == static_cast<quint32>(MessageType::ChatMessage) &&
+           !message.text.trimmed().isEmpty() &&
+           message.text.size() <= messenger::protocol::MaximumMessageSize;
 }
 
 std::vector<std::uint8_t> toByteVector(const QByteArray& bytes) {
@@ -40,10 +39,8 @@ std::optional<PublicKey> deserializePublicKey(const QByteArray& serializedKey) {
         PublicKey publicKey;
         const auto bytes = toByteVector(serializedKey);
         const operations::BigInt one(1);
-        if (!keyPair::s_deserialize(bytes, publicKey.n, publicKey.e)
-            || publicKey.n <= one
-            || publicKey.e <= one
-            || publicKey.serialize() != bytes) {
+        if (!keyPair::s_deserialize(bytes, publicKey.n, publicKey.e) || publicKey.n <= one ||
+            publicKey.e <= one || publicKey.serialize() != bytes) {
             return std::nullopt;
         }
         return publicKey;
@@ -64,9 +61,7 @@ server::server() {
     connect(&tcpServer_, &QTcpServer::acceptError, this, &server::handleAcceptError);
 }
 
-server::~server() {
-    shutdown();
-}
+server::~server() { shutdown(); }
 
 void server::shutdown() {
     tcpServer_.close();
@@ -101,7 +96,6 @@ void server::handleNewConnection() {
 
         connect(session, &Session::messageReceived, this, &server::handleMessageReceived);
         connect(session, &Session::disconnected, this, &server::handleSessionDisconnected);
-
     }
 }
 
@@ -111,7 +105,8 @@ void server::handleAcceptError(QAbstractSocket::SocketError socketError) {
 
 void server::handleMessageReceived(const Message& message, Session* session) {
     if (message.protocolVersion != CurrentProtocolVersion) {
-        qWarning() << "Ignoring message with unsupported protocol version" << message.protocolVersion;
+        qWarning() << "Ignoring message with unsupported protocol version"
+                   << message.protocolVersion;
         return;
     }
 
@@ -125,9 +120,9 @@ void server::handleMessageReceived(const Message& message, Session* session) {
         }
 
         const auto requestedUserName = message.senderName.trimmed();
-        if (requestedUserName.isEmpty()
-            || requestedUserName.size() > messenger::protocol::MaximumUserNameSize
-            || message.clientNonce.size() != messenger::protocol::AuthenticationNonceSize) {
+        if (requestedUserName.isEmpty() ||
+            requestedUserName.size() > messenger::protocol::MaximumUserNameSize ||
+            message.clientNonce.size() != messenger::protocol::AuthenticationNonceSize) {
             qWarning() << "Rejecting malformed AuthHello";
             session->rejectAuthentication();
             return;
@@ -146,11 +141,11 @@ void server::handleMessageReceived(const Message& message, Session* session) {
                 requestedUserName, message.publicKey, session->peerAddress());
             switch (request.status) {
                 case RegistrationRequestResult::Status::Created:
-                    qInfo().noquote()
-                        << QStringLiteral("New registration request %1 for \"%2\" from %3. "
-                                          "Run 'Messenger-Server requests' to review it.")
-                               .arg(request.requestId)
-                               .arg(requestedUserName, session->peerAddress());
+                    qInfo().noquote() << QStringLiteral(
+                                             "New registration request %1 for \"%2\" from %3. "
+                                             "Run 'Messenger-Server requests' to review it.")
+                                             .arg(request.requestId)
+                                             .arg(requestedUserName, session->peerAddress());
                     [[fallthrough]];
                 case RegistrationRequestResult::Status::Pending:
                     session->rejectAuthentication(
@@ -180,12 +175,8 @@ void server::handleMessageReceived(const Message& message, Session* session) {
             messenger::protocol::AuthenticationIdSize);
         const auto serverNonce = messenger::protocol::generateSecureRandomBytes(
             messenger::protocol::AuthenticationNonceSize);
-        session->beginAuthentication(user->userId,
-                                     user->userName,
-                                     *publicKey,
-                                     authenticationId,
-                                     message.clientNonce,
-                                     serverNonce);
+        session->beginAuthentication(user->userId, user->userName, *publicKey, authenticationId,
+                                     message.clientNonce, serverNonce);
 
         Message challenge;
         challenge.messageType = static_cast<quint32>(MessageType::AuthChallenge);
@@ -197,26 +188,22 @@ void server::handleMessageReceived(const Message& message, Session* session) {
     }
 
     if (session->authenticationState() == Session::AuthenticationState::AwaitingProof) {
-        if (messageType != MessageType::AuthProof
-            || session->authenticationExpired()
-            || message.authenticationId.size() != messenger::protocol::AuthenticationIdSize
-            || message.authenticationId != session->authenticationId()
-            || message.signature.isEmpty()) {
+        if (messageType != MessageType::AuthProof || session->authenticationExpired() ||
+            message.authenticationId.size() != messenger::protocol::AuthenticationIdSize ||
+            message.authenticationId != session->authenticationId() ||
+            message.signature.isEmpty()) {
             qWarning() << "Rejecting malformed or expired AuthProof for" << session->userName();
             session->rejectAuthentication();
             return;
         }
 
         const auto transcript = messenger::protocol::authenticationTranscript(
-            session->userName(),
-            session->authenticationId(),
-            session->clientNonce(),
+            session->userName(), session->authenticationId(), session->clientNonce(),
             session->serverNonce());
         const auto digest = QCryptographicHash::hash(transcript, QCryptographicHash::Sha256);
-        const auto signatureValid = core::signature::verifyDigest(
-            session->authenticationPublicKey(),
-            toByteVector(digest),
-            toByteVector(message.signature));
+        const auto signatureValid =
+            core::signature::verifyDigest(session->authenticationPublicKey(), toByteVector(digest),
+                                          toByteVector(message.signature));
         if (!signatureValid) {
             qWarning() << "Authentication signature verification failed for" << session->userName();
             session->rejectAuthentication();
@@ -276,8 +263,8 @@ void server::handleMessageReceived(const Message& message, Session* session) {
 
     QList<Session*> deletedUserSessions;
     for (auto* connectedSession : std::as_const(sessions_)) {
-        if (connectedSession->isAuthenticated()
-            && !messageStore_.hasUser(connectedSession->userName())) {
+        if (connectedSession->isAuthenticated() &&
+            !messageStore_.hasUser(connectedSession->userName())) {
             deletedUserSessions.append(connectedSession);
         } else if (connectedSession->isAuthenticated()) {
             connectedSession->sendMessage(verifiedMessage);
@@ -296,17 +283,16 @@ void server::handleSessionDisconnected(Session* session) {
 namespace {
 
 void printServerUsage(const QString& executable) {
-    qInfo().noquote()
-        << QStringLiteral(
-               "Usage:\n"
-               "  %1                 Start the server\n"
-               "  %1 requests        List pending registration requests\n"
-               "  %1 approve <id>     Approve a registration request\n"
-               "  %1 reject <id>      Reject a registration request\n"
-               "  %1 users           List all users\n"
-               "  %1 delete-user <id> Delete a user and all associated data\n"
-               "  %1 clear-history   Delete all stored chat messages")
-               .arg(executable);
+    qInfo().noquote() << QStringLiteral(
+                             "Usage:\n"
+                             "  %1                 Start the server\n"
+                             "  %1 requests        List pending registration requests\n"
+                             "  %1 approve <id>     Approve a registration request\n"
+                             "  %1 reject <id>      Reject a registration request\n"
+                             "  %1 users           List all users\n"
+                             "  %1 delete-user <id> Delete a user and all associated data\n"
+                             "  %1 clear-history   Delete all stored chat messages")
+                             .arg(executable);
 }
 
 int runAdministrationCommand(const QStringList& arguments) {
@@ -325,17 +311,15 @@ int runAdministrationCommand(const QStringList& arguments) {
         }
 
         for (const auto& request : requests) {
-            const auto fingerprint = QCryptographicHash::hash(
-                                         request.publicKey, QCryptographicHash::Sha256)
-                                         .toHex(':')
-                                         .toUpper();
-            qInfo().noquote()
-                << QStringLiteral("[%1] %2\n    From: %3\n    Created: %4\n    Key: %5")
-                       .arg(request.requestId)
-                       .arg(request.userName,
-                            request.sourceAddress,
-                            request.createdAt,
-                            QString::fromLatin1(fingerprint));
+            const auto fingerprint =
+                QCryptographicHash::hash(request.publicKey, QCryptographicHash::Sha256)
+                    .toHex(':')
+                    .toUpper();
+            qInfo().noquote() << QStringLiteral(
+                                     "[%1] %2\n    From: %3\n    Created: %4\n    Key: %5")
+                                     .arg(request.requestId)
+                                     .arg(request.userName, request.sourceAddress,
+                                          request.createdAt, QString::fromLatin1(fingerprint));
         }
         return 0;
     }
@@ -348,16 +332,15 @@ int runAdministrationCommand(const QStringList& arguments) {
         }
 
         for (const auto& user : users) {
-            qInfo().noquote()
-                << QStringLiteral("[%1] %2\n    Created: %3")
-                       .arg(user.userId)
-                       .arg(user.userName, user.createdAt);
+            qInfo().noquote() << QStringLiteral("[%1] %2\n    Created: %3")
+                                     .arg(user.userId)
+                                     .arg(user.userName, user.createdAt);
         }
         return 0;
     }
 
-    if ((command == QStringLiteral("approve") || command == QStringLiteral("reject"))
-        && arguments.size() == 3) {
+    if ((command == QStringLiteral("approve") || command == QStringLiteral("reject")) &&
+        arguments.size() == 3) {
         bool validId = false;
         const auto requestId = arguments.at(2).toLongLong(&validId);
         if (!validId || requestId <= 0) {

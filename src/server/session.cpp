@@ -2,15 +2,15 @@
 
 #include <QAbstractSocket>
 #include <QDateTime>
-#include <QTcpSocket>
 #include <QDebug>
+#include <QTcpSocket>
 
+using messenger::protocol::AuthenticationTimeoutMs;
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DataStreamVersion;
 using messenger::protocol::Message;
 using messenger::protocol::MessageType;
 using messenger::protocol::ReadBufferSize;
-using messenger::protocol::AuthenticationTimeoutMs;
 
 Session::Session(QTcpSocket* socket, QObject* parent)
     : QObject(parent), socket_(socket), stream_(socket) {
@@ -47,11 +47,8 @@ void Session::sendMessage(const Message& message) {
     socket_->flush();
 }
 
-void Session::beginAuthentication(int userId,
-                                  const QString& userName,
-                                  const PublicKey& publicKey,
-                                  const QByteArray& authenticationId,
-                                  const QByteArray& clientNonce,
+void Session::beginAuthentication(int userId, const QString& userName, const PublicKey& publicKey,
+                                  const QByteArray& authenticationId, const QByteArray& clientNonce,
                                   const QByteArray& serverNonce) {
     if (authenticationState_ != AuthenticationState::AwaitingHello) {
         return;
@@ -98,49 +95,29 @@ void Session::rejectAuthentication(const QString& reason, MessageType messageTyp
     socket_->disconnectFromHost();
 }
 
-void Session::disconnectFromHost() {
-    socket_->disconnectFromHost();
-}
+void Session::disconnectFromHost() { socket_->disconnectFromHost(); }
 
-Session::AuthenticationState Session::authenticationState() const {
-    return authenticationState_;
-}
+Session::AuthenticationState Session::authenticationState() const { return authenticationState_; }
 
 bool Session::isAuthenticated() const {
     return authenticationState_ == AuthenticationState::Authenticated;
 }
 
-bool Session::authenticationExpired() const {
-    return authenticationDeadline_.hasExpired();
-}
+bool Session::authenticationExpired() const { return authenticationDeadline_.hasExpired(); }
 
-int Session::userId() const {
-    return userId_;
-}
+int Session::userId() const { return userId_; }
 
-QString Session::userName() const {
-    return userName_;
-}
+QString Session::userName() const { return userName_; }
 
-const PublicKey& Session::authenticationPublicKey() const {
-    return authenticationPublicKey_;
-}
+const PublicKey& Session::authenticationPublicKey() const { return authenticationPublicKey_; }
 
-const QByteArray& Session::authenticationId() const {
-    return authenticationId_;
-}
+const QByteArray& Session::authenticationId() const { return authenticationId_; }
 
-const QByteArray& Session::clientNonce() const {
-    return clientNonce_;
-}
+const QByteArray& Session::clientNonce() const { return clientNonce_; }
 
-const QByteArray& Session::serverNonce() const {
-    return serverNonce_;
-}
+const QByteArray& Session::serverNonce() const { return serverNonce_; }
 
-QString Session::peerAddress() const {
-    return socket_->peerAddress().toString();
-}
+QString Session::peerAddress() const { return socket_->peerAddress().toString(); }
 
 void Session::readAvailable() {
     while (socket_->bytesAvailable() > 0) {
@@ -154,8 +131,8 @@ void Session::readAvailable() {
         }
 
         if (message.protocolVersion != CurrentProtocolVersion) {
-            qWarning() << "Unsupported protocol version" << message.protocolVersion
-                       << "from" << socket_->peerAddress().toString();
+            qWarning() << "Unsupported protocol version" << message.protocolVersion << "from"
+                       << socket_->peerAddress().toString();
             socket_->disconnectFromHost();
             return;
         }
@@ -165,7 +142,8 @@ void Session::readAvailable() {
 }
 
 void Session::handleDisconnected() {
-    qInfo() << "Client disconnected from" << socket_->peerAddress().toString() << socket_->peerPort();
+    qInfo() << "Client disconnected from" << socket_->peerAddress().toString()
+            << socket_->peerPort();
     emit disconnected(this);
 }
 

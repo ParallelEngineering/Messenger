@@ -1,10 +1,12 @@
-find_package(Qt6 COMPONENTS Quick Qml Network REQUIRED)
+find_package(Qt6 COMPONENTS Quick Qml QuickControls2 Network REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(Messenger-Client
         WIN32
         MACOSX_BUNDLE
+        connection_store.cpp
+        network_manager.cpp
         client.cpp
 )
 
@@ -24,5 +26,8 @@ target_link_libraries(Messenger-Client
         PRIVATE
             Qt6::Quick
             Qt6::Qml
+            Qt6::QuickControls2
             Qt6::Network
+            Messenger-Shared
+            RSA
 )

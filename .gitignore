@@ -3,3 +3,8 @@
 /Testing
 /cmake-build-debug
 .vscode
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm

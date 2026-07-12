@@ -8,7 +8,9 @@
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::DataStreamVersion;
 using messenger::protocol::Message;
+using messenger::protocol::MessageType;
 using messenger::protocol::ReadBufferSize;
+using messenger::protocol::AuthenticationTimeoutMs;
 
 Session::Session(QTcpSocket* socket, QObject* parent)
     : QObject(parent), socket_(socket), stream_(socket) {
@@ -19,6 +21,17 @@ Session::Session(QTcpSocket* socket, QObject* parent)
     connect(socket_, &QTcpSocket::readyRead, this, &Session::readAvailable);
     connect(socket_, &QTcpSocket::disconnected, this, &Session::handleDisconnected);
     connect(socket_, &QTcpSocket::errorOccurred, this, &Session::handleError);
+
+    authenticationDeadline_.setRemainingTime(AuthenticationTimeoutMs);
+    authenticationTimer_.setSingleShot(true);
+    authenticationTimer_.start(AuthenticationTimeoutMs);
+    connect(&authenticationTimer_, &QTimer::timeout, this, [this]() {
+        if (!isAuthenticated()) {
+            qWarning() << "Client authentication timed out for"
+                       << socket_->peerAddress().toString();
+            rejectAuthentication(QStringLiteral("Authentication timed out."));
+        }
+    });
 
     qInfo() << "Client connected from" << socket_->peerAddress().toString() << socket_->peerPort();
 }
@@ -34,16 +47,95 @@ void Session::sendMessage(const Message& message) {
     socket_->flush();
 }
 
+void Session::beginAuthentication(int userId,
+                                  const QString& userName,
+                                  const PublicKey& publicKey,
+                                  const QByteArray& authenticationId,
+                                  const QByteArray& clientNonce,
+                                  const QByteArray& serverNonce) {
+    if (authenticationState_ != AuthenticationState::AwaitingHello) {
+        return;
+    }
+
+    userId_ = userId;
+    userName_ = userName.trimmed();
+    authenticationPublicKey_ = publicKey;
+    authenticationId_ = authenticationId;
+    clientNonce_ = clientNonce;
+    serverNonce_ = serverNonce;
+    authenticationState_ = AuthenticationState::AwaitingProof;
+}
+
+void Session::completeAuthentication() {
+    if (authenticationState_ != AuthenticationState::AwaitingProof) {
+        return;
+    }
+
+    authenticationState_ = AuthenticationState::Authenticated;
+    authenticationTimer_.stop();
+    authenticationPublicKey_ = {};
+    authenticationId_.clear();
+    clientNonce_.clear();
+    serverNonce_.clear();
+}
+
+void Session::rejectAuthentication(const QString& reason) {
+    if (authenticationState_ == AuthenticationState::Rejected) {
+        return;
+    }
+
+    authenticationState_ = AuthenticationState::Rejected;
+    authenticationTimer_.stop();
+    authenticationPublicKey_ = {};
+    authenticationId_.clear();
+    clientNonce_.clear();
+    serverNonce_.clear();
+
+    Message failure;
+    failure.messageType = static_cast<quint32>(MessageType::AuthFailure);
+    failure.text = reason;
+    sendMessage(failure);
+    socket_->disconnectFromHost();
+}
+
+void Session::disconnectFromHost() {
+    socket_->disconnectFromHost();
+}
+
+Session::AuthenticationState Session::authenticationState() const {
+    return authenticationState_;
+}
+
+bool Session::isAuthenticated() const {
+    return authenticationState_ == AuthenticationState::Authenticated;
+}
+
+bool Session::authenticationExpired() const {
+    return authenticationDeadline_.hasExpired();
+}
+
+int Session::userId() const {
+    return userId_;
+}
+
 QString Session::userName() const {
     return userName_;
 }
 
-bool Session::hasUserName() const {
-    return !userName_.isEmpty();
+const PublicKey& Session::authenticationPublicKey() const {
+    return authenticationPublicKey_;
 }
 
-void Session::setUserName(const QString& userName) {
-    userName_ = userName.trimmed();
+const QByteArray& Session::authenticationId() const {
+    return authenticationId_;
+}
+
+const QByteArray& Session::clientNonce() const {
+    return clientNonce_;
+}
+
+const QByteArray& Session::serverNonce() const {
+    return serverNonce_;
 }
 
 void Session::readAvailable() {

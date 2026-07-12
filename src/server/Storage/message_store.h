@@ -15,6 +15,12 @@ struct UserAuthenticationRecord {
     QByteArray publicKey;
 };
 
+struct StoredUser {
+    qint64 userId;
+    QString userName;
+    QString createdAt;
+};
+
 struct RegistrationRequest {
     qint64 requestId;
     QString userName;
@@ -57,6 +63,8 @@ class MessageStore {
     [[nodiscard]] QList<RegistrationRequest> pendingRegistrationRequests() const;
     bool approveRegistrationRequest(qint64 requestId) const;
     bool rejectRegistrationRequest(qint64 requestId) const;
+    [[nodiscard]] QList<StoredUser> users() const;
+    bool deleteUser(qint64 userId) const;
     bool saveMessage(const messenger::protocol::Message& message);
     QList<messenger::protocol::Message> loadMessages() const;
 

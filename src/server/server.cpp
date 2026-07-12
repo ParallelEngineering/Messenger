@@ -244,6 +244,12 @@ void server::handleMessageReceived(const Message& message, Session* session) {
         return;
     }
 
+    if (!messageStore_.hasUser(session->userName())) {
+        qInfo() << "Disconnecting session for deleted user" << session->userName();
+        session->disconnectFromHost();
+        return;
+    }
+
     if (messageType != MessageType::ChatMessage || !isValidChatMessage(message)) {
         qWarning() << "Disconnecting authenticated session after invalid message from"
                    << session->userName();
@@ -268,10 +274,17 @@ void server::handleMessageReceived(const Message& message, Session* session) {
         return;
     }
 
+    QList<Session*> deletedUserSessions;
     for (auto* connectedSession : std::as_const(sessions_)) {
-        if (connectedSession->isAuthenticated()) {
+        if (connectedSession->isAuthenticated()
+            && !messageStore_.hasUser(connectedSession->userName())) {
+            deletedUserSessions.append(connectedSession);
+        } else if (connectedSession->isAuthenticated()) {
             connectedSession->sendMessage(verifiedMessage);
         }
+    }
+    for (auto* deletedUserSession : deletedUserSessions) {
+        deletedUserSession->disconnectFromHost();
     }
 }
 
@@ -289,7 +302,9 @@ void printServerUsage(const QString& executable) {
                "  %1                 Start the server\n"
                "  %1 requests        List pending registration requests\n"
                "  %1 approve <id>     Approve a registration request\n"
-               "  %1 reject <id>      Reject a registration request")
+               "  %1 reject <id>      Reject a registration request\n"
+               "  %1 users           List all users\n"
+               "  %1 delete-user <id> Delete a user and all associated data")
                .arg(executable);
 }
 
@@ -324,6 +339,22 @@ int runAdministrationCommand(const QStringList& arguments) {
         return 0;
     }
 
+    if (command == QStringLiteral("users") && arguments.size() == 2) {
+        const auto users = store.users();
+        if (users.isEmpty()) {
+            qInfo() << "There are no users.";
+            return 0;
+        }
+
+        for (const auto& user : users) {
+            qInfo().noquote()
+                << QStringLiteral("[%1] %2\n    Created: %3")
+                       .arg(user.userId)
+                       .arg(user.userName, user.createdAt);
+        }
+        return 0;
+    }
+
     if ((command == QStringLiteral("approve") || command == QStringLiteral("reject"))
         && arguments.size() == 3) {
         bool validId = false;
@@ -337,6 +368,16 @@ int runAdministrationCommand(const QStringList& arguments) {
                                  ? store.approveRegistrationRequest(requestId)
                                  : store.rejectRegistrationRequest(requestId);
         return success ? 0 : 1;
+    }
+
+    if (command == QStringLiteral("delete-user") && arguments.size() == 3) {
+        bool validId = false;
+        const auto userId = arguments.at(2).toLongLong(&validId);
+        if (!validId || userId <= 0) {
+            qCritical() << "The user ID must be a positive number.";
+            return 2;
+        }
+        return store.deleteUser(userId) ? 0 : 1;
     }
 
     printServerUsage(arguments.first());

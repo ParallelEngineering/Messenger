@@ -438,6 +438,89 @@ bool MessageStore::rejectRegistrationRequest(qint64 requestId) const {
     return true;
 }
 
+QList<StoredUser> MessageStore::users() const {
+    QList<StoredUser> users;
+    if (!initialized_) {
+        return users;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    query.prepare(R"(
+        SELECT id, username, created_at
+        FROM users
+        ORDER BY username COLLATE NOCASE ASC, id ASC
+    )");
+    if (!query.exec()) {
+        qWarning() << "Could not list users:" << lastErrorText(query);
+        return users;
+    }
+
+    while (query.next()) {
+        users.append({
+            query.value(QStringLiteral("id")).toLongLong(),
+            query.value(QStringLiteral("username")).toString(),
+            query.value(QStringLiteral("created_at")).toString(),
+        });
+    }
+    return users;
+}
+
+bool MessageStore::deleteUser(qint64 userId) const {
+    if (!initialized_) {
+        return false;
+    }
+
+    auto database = QSqlDatabase::database(connectionName_);
+    if (!database.transaction()) {
+        return false;
+    }
+
+    QSqlQuery userQuery(database);
+    userQuery.prepare(QStringLiteral("SELECT username FROM users WHERE id = :id"));
+    userQuery.bindValue(QStringLiteral(":id"), userId);
+    if (!userQuery.exec() || !userQuery.next()) {
+        qWarning() << "User not found:" << userId;
+        database.rollback();
+        return false;
+    }
+    const auto userName = userQuery.value(QStringLiteral("username")).toString();
+
+    QSqlQuery messagesQuery(database);
+    messagesQuery.prepare(QStringLiteral("DELETE FROM messages WHERE user_id = :user_id"));
+    messagesQuery.bindValue(QStringLiteral(":user_id"), userId);
+    if (!messagesQuery.exec()) {
+        qWarning() << "Could not delete messages for user:" << lastErrorText(messagesQuery);
+        database.rollback();
+        return false;
+    }
+
+    QSqlQuery requestsQuery(database);
+    requestsQuery.prepare(
+        QStringLiteral("DELETE FROM registration_requests WHERE username = :username"));
+    requestsQuery.bindValue(QStringLiteral(":username"), userName);
+    if (!requestsQuery.exec()) {
+        qWarning() << "Could not delete registration requests for user:"
+                   << lastErrorText(requestsQuery);
+        database.rollback();
+        return false;
+    }
+
+    QSqlQuery deleteUserQuery(database);
+    deleteUserQuery.prepare(QStringLiteral("DELETE FROM users WHERE id = :id"));
+    deleteUserQuery.bindValue(QStringLiteral(":id"), userId);
+    if (!deleteUserQuery.exec() || deleteUserQuery.numRowsAffected() != 1) {
+        database.rollback();
+        return false;
+    }
+
+    if (!database.commit()) {
+        database.rollback();
+        return false;
+    }
+    qInfo() << "Deleted user" << userName << "with ID" << userId;
+    return true;
+}
+
 int MessageStore::userIdForUserName(const QString& userName) const {
     if (!initialized_) {
         qWarning() << "Cannot look up user before message store initialization";

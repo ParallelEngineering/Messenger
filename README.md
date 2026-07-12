@@ -83,3 +83,10 @@ Messenger-Server reject 2
 ```
 
 After approval, the client connects again manually and uses the normal RSA authentication flow. No administrator account or manually installed public-key file is required.
+
+Existing users can be listed and completely removed by ID. Deletion also removes that user's messages and registration requests, so the username can be registered again later:
+
+```bash
+Messenger-Server users
+Messenger-Server delete-user 1
+```

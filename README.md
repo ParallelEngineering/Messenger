@@ -2,6 +2,11 @@
 
 Messenger is a simple chat program with a client and a server. Users can connect to a server, send messages, receive messages, and see the previous chat history. The messenger is intentionally kept simple: there is only one chat on each server, because the project is mainly a learning project focused on networking and encryption.
 
+<p align="center">
+  <img src="docs/img/client_start_screen.png" alt="Start screen" width="49%">
+  <img src="docs/img/client_chat.png" alt="Client chat" width="49%">
+</p>
+
 ## Functionality
 
 - **Client connection:** enter a server host, connect to the server, disconnect again when terminating the program, and see the current connection status in the UI.

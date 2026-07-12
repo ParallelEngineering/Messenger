@@ -15,6 +15,26 @@ struct UserAuthenticationRecord {
     QByteArray publicKey;
 };
 
+struct RegistrationRequest {
+    qint64 requestId;
+    QString userName;
+    QByteArray publicKey;
+    QString sourceAddress;
+    QString createdAt;
+};
+
+struct RegistrationRequestResult {
+    enum class Status {
+        Created,
+        Pending,
+        Rejected,
+        Failed,
+    };
+
+    Status status = Status::Failed;
+    qint64 requestId = -1;
+};
+
 class MessageStore {
    public:
     MessageStore();
@@ -30,6 +50,13 @@ class MessageStore {
     bool hasUser(const QString& userName) const;
     [[nodiscard]] std::optional<UserAuthenticationRecord> findUserForAuthentication(
         const QString& userName) const;
+    [[nodiscard]] RegistrationRequestResult requestRegistration(
+        const QString& userName,
+        const QByteArray& publicKey,
+        const QString& sourceAddress) const;
+    [[nodiscard]] QList<RegistrationRequest> pendingRegistrationRequests() const;
+    bool approveRegistrationRequest(qint64 requestId) const;
+    bool rejectRegistrationRequest(qint64 requestId) const;
     bool saveMessage(const messenger::protocol::Message& message);
     QList<messenger::protocol::Message> loadMessages() const;
 
@@ -37,7 +64,6 @@ class MessageStore {
     int userIdForUserName(const QString& userName) const;
     bool openDatabase();
     bool runMigrations();
-    bool ensureAdminUser(const QByteArray& publicKey) const;
     bool executeSqlScript(const QString& script) const;
     QString databasePath() const;
 

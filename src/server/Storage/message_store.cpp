@@ -1,7 +1,5 @@
 #include "message_store.h"
 
-#include "keyPair.h"
-
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -13,10 +11,7 @@
 #include <QSqlQuery>
 #include <QStandardPaths>
 
-#include <cstdint>
-#include <exception>
 #include <optional>
-#include <vector>
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::Message;
@@ -25,57 +20,9 @@ using messenger::protocol::MessageType;
 namespace {
 
 constexpr auto InvalidUserId = -1;
-constexpr auto AdminPublicKeyFileName = "admin.public.rsa";
 
 QString lastErrorText(const QSqlQuery& query) {
     return query.lastError().text();
-}
-
-std::optional<QByteArray> loadAdminPublicKey(const QString& databasePath) {
-    const auto publicKeyPath = QFileInfo(databasePath).absoluteDir().filePath(
-        QString::fromLatin1(AdminPublicKeyFileName));
-    const QFileInfo publicKeyInfo(publicKeyPath);
-    if (!publicKeyInfo.exists()) {
-        qCritical() << "Admin public key file does not exist:" << publicKeyInfo.absoluteFilePath();
-        return std::nullopt;
-    }
-    if (!publicKeyInfo.isFile()) {
-        qCritical() << "Admin public key path is not a file:" << publicKeyInfo.absoluteFilePath();
-        return std::nullopt;
-    }
-
-    QFile publicKeyFile(publicKeyPath);
-    if (!publicKeyFile.open(QIODevice::ReadOnly)) {
-        qCritical() << "Could not read admin public key file:" << publicKeyInfo.absoluteFilePath()
-                    << publicKeyFile.errorString();
-        return std::nullopt;
-    }
-
-    const auto publicKeyData = publicKeyFile.readAll();
-    if (publicKeyData.isEmpty()) {
-        qCritical() << "Admin public key file is empty:" << publicKeyInfo.absoluteFilePath();
-        return std::nullopt;
-    }
-
-    const std::vector<std::uint8_t> serializedKey(publicKeyData.cbegin(), publicKeyData.cend());
-    try {
-        PublicKey publicKey;
-        const operations::BigInt one(1);
-        if (!keyPair::s_deserialize(serializedKey, publicKey.n, publicKey.e)
-            || publicKey.n <= one
-            || publicKey.e <= one
-            || publicKey.serialize() != serializedKey) {
-            qCritical() << "Admin public key file contains an invalid RSA public key:"
-                        << publicKeyInfo.absoluteFilePath();
-            return std::nullopt;
-        }
-    } catch (const std::exception& exception) {
-        qCritical() << "Could not parse admin public key file:" << publicKeyInfo.absoluteFilePath()
-                    << exception.what();
-        return std::nullopt;
-    }
-
-    return publicKeyData;
 }
 
 QList<QString> splitSqlStatements(const QString& script) {
@@ -162,20 +109,11 @@ bool MessageStore::initialize() {
         return true;
     }
 
-    const auto adminPublicKey = loadAdminPublicKey(databasePath());
-    if (!adminPublicKey) {
-        return false;
-    }
-
     if (!openDatabase()) {
         return false;
     }
 
     if (!runMigrations()) {
-        return false;
-    }
-
-    if (!ensureAdminUser(*adminPublicKey)) {
         return false;
     }
 
@@ -319,6 +257,187 @@ std::optional<UserAuthenticationRecord> MessageStore::findUserForAuthentication(
     };
 }
 
+RegistrationRequestResult MessageStore::requestRegistration(
+    const QString& userName,
+    const QByteArray& publicKey,
+    const QString& sourceAddress) const {
+    if (!initialized_) {
+        return {};
+    }
+
+    auto database = QSqlDatabase::database(connectionName_);
+    QSqlQuery existingQuery(database);
+    existingQuery.prepare(R"(
+        SELECT id, status
+        FROM registration_requests
+        WHERE username = :username AND public_key = :public_key
+    )");
+    existingQuery.bindValue(QStringLiteral(":username"), userName.trimmed());
+    existingQuery.bindValue(QStringLiteral(":public_key"), publicKey);
+    if (!existingQuery.exec()) {
+        qWarning() << "Could not look up registration request:" << lastErrorText(existingQuery);
+        return {};
+    }
+    if (existingQuery.next()) {
+        const auto status = existingQuery.value(QStringLiteral("status")).toString();
+        return {
+            status == QStringLiteral("rejected")
+                ? RegistrationRequestResult::Status::Rejected
+                : RegistrationRequestResult::Status::Pending,
+            existingQuery.value(QStringLiteral("id")).toLongLong(),
+        };
+    }
+
+    QSqlQuery insertQuery(database);
+    insertQuery.prepare(R"(
+        INSERT INTO registration_requests (
+            username, public_key, source_address, status, created_at
+        ) VALUES (
+            :username, :public_key, :source_address, 'pending', :created_at
+        )
+    )");
+    insertQuery.bindValue(QStringLiteral(":username"), userName.trimmed());
+    insertQuery.bindValue(QStringLiteral(":public_key"), publicKey);
+    insertQuery.bindValue(QStringLiteral(":source_address"), sourceAddress);
+    insertQuery.bindValue(QStringLiteral(":created_at"),
+                          QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+    if (!insertQuery.exec()) {
+        qWarning() << "Could not create registration request:" << lastErrorText(insertQuery);
+        return {};
+    }
+
+    return {RegistrationRequestResult::Status::Created, insertQuery.lastInsertId().toLongLong()};
+}
+
+QList<RegistrationRequest> MessageStore::pendingRegistrationRequests() const {
+    QList<RegistrationRequest> requests;
+    if (!initialized_) {
+        return requests;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    query.prepare(R"(
+        SELECT id, username, public_key, source_address, created_at
+        FROM registration_requests
+        WHERE status = 'pending'
+        ORDER BY created_at ASC, id ASC
+    )");
+    if (!query.exec()) {
+        qWarning() << "Could not list registration requests:" << lastErrorText(query);
+        return requests;
+    }
+
+    while (query.next()) {
+        requests.append({
+            query.value(QStringLiteral("id")).toLongLong(),
+            query.value(QStringLiteral("username")).toString(),
+            query.value(QStringLiteral("public_key")).toByteArray(),
+            query.value(QStringLiteral("source_address")).toString(),
+            query.value(QStringLiteral("created_at")).toString(),
+        });
+    }
+    return requests;
+}
+
+bool MessageStore::approveRegistrationRequest(qint64 requestId) const {
+    if (!initialized_) {
+        return false;
+    }
+
+    auto database = QSqlDatabase::database(connectionName_);
+    if (!database.transaction()) {
+        return false;
+    }
+
+    QSqlQuery requestQuery(database);
+    requestQuery.prepare(R"(
+        SELECT username, public_key
+        FROM registration_requests
+        WHERE id = :id AND status = 'pending'
+    )");
+    requestQuery.bindValue(QStringLiteral(":id"), requestId);
+    if (!requestQuery.exec() || !requestQuery.next()) {
+        qWarning() << "Pending registration request not found:" << requestId;
+        database.rollback();
+        return false;
+    }
+
+    const auto userName = requestQuery.value(QStringLiteral("username")).toString();
+    const auto publicKey = requestQuery.value(QStringLiteral("public_key")).toByteArray();
+    const auto now = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+
+    QSqlQuery insertUserQuery(database);
+    insertUserQuery.prepare(R"(
+        INSERT INTO users (username, public_key, created_at)
+        VALUES (:username, :public_key, :created_at)
+    )");
+    insertUserQuery.bindValue(QStringLiteral(":username"), userName);
+    insertUserQuery.bindValue(QStringLiteral(":public_key"), publicKey);
+    insertUserQuery.bindValue(QStringLiteral(":created_at"), now);
+    if (!insertUserQuery.exec()) {
+        qWarning() << "Could not create user from registration request:"
+                   << lastErrorText(insertUserQuery);
+        database.rollback();
+        return false;
+    }
+
+    QSqlQuery approveQuery(database);
+    approveQuery.prepare(R"(
+        UPDATE registration_requests
+        SET status = 'approved', reviewed_at = :reviewed_at
+        WHERE id = :id AND status = 'pending'
+    )");
+    approveQuery.bindValue(QStringLiteral(":reviewed_at"), now);
+    approveQuery.bindValue(QStringLiteral(":id"), requestId);
+    if (!approveQuery.exec() || approveQuery.numRowsAffected() != 1) {
+        database.rollback();
+        return false;
+    }
+
+    QSqlQuery rejectOthersQuery(database);
+    rejectOthersQuery.prepare(R"(
+        UPDATE registration_requests
+        SET status = 'rejected', reviewed_at = :reviewed_at
+        WHERE username = :username AND id <> :id AND status = 'pending'
+    )");
+    rejectOthersQuery.bindValue(QStringLiteral(":reviewed_at"), now);
+    rejectOthersQuery.bindValue(QStringLiteral(":username"), userName);
+    rejectOthersQuery.bindValue(QStringLiteral(":id"), requestId);
+    if (!rejectOthersQuery.exec()) {
+        database.rollback();
+        return false;
+    }
+
+    if (!database.commit()) {
+        database.rollback();
+        return false;
+    }
+    qInfo() << "Approved registration request" << requestId << "and created user" << userName;
+    return true;
+}
+
+bool MessageStore::rejectRegistrationRequest(qint64 requestId) const {
+    if (!initialized_) {
+        return false;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    query.prepare(R"(
+        UPDATE registration_requests
+        SET status = 'rejected', reviewed_at = :reviewed_at
+        WHERE id = :id AND status = 'pending'
+    )");
+    query.bindValue(QStringLiteral(":reviewed_at"),
+                    QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+    query.bindValue(QStringLiteral(":id"), requestId);
+    if (!query.exec() || query.numRowsAffected() != 1) {
+        qWarning() << "Pending registration request not found:" << requestId;
+        return false;
+    }
+    qInfo() << "Rejected registration request" << requestId;
+    return true;
+}
+
 int MessageStore::userIdForUserName(const QString& userName) const {
     if (!initialized_) {
         qWarning() << "Cannot look up user before message store initialization";
@@ -451,39 +570,6 @@ bool MessageStore::runMigrations() {
         }
 
         qInfo() << "Applied database migration" << migrationFile;
-    }
-
-    return true;
-}
-
-bool MessageStore::ensureAdminUser(const QByteArray& publicKey) const {
-    auto database = QSqlDatabase::database(connectionName_);
-    if (!database.transaction()) {
-        qWarning() << "Could not start admin user transaction:" << database.lastError().text();
-        return false;
-    }
-
-    QSqlQuery query(database);
-    query.prepare(R"(
-        INSERT INTO users (username, public_key, created_at)
-        VALUES (:username, :public_key, :created_at)
-        ON CONFLICT(username) DO UPDATE SET public_key = excluded.public_key
-    )");
-    query.bindValue(QStringLiteral(":username"), QStringLiteral("admin"));
-    query.bindValue(QStringLiteral(":public_key"), publicKey);
-    query.bindValue(QStringLiteral(":created_at"),
-                    QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
-
-    if (!query.exec()) {
-        qWarning() << "Could not create or update admin user:" << lastErrorText(query);
-        database.rollback();
-        return false;
-    }
-
-    if (!database.commit()) {
-        qWarning() << "Could not commit admin user transaction:" << database.lastError().text();
-        database.rollback();
-        return false;
     }
 
     return true;

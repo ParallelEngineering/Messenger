@@ -79,7 +79,7 @@ void Session::completeAuthentication() {
     serverNonce_.clear();
 }
 
-void Session::rejectAuthentication(const QString& reason) {
+void Session::rejectAuthentication(const QString& reason, MessageType messageType) {
     if (authenticationState_ == AuthenticationState::Rejected) {
         return;
     }
@@ -92,7 +92,7 @@ void Session::rejectAuthentication(const QString& reason) {
     serverNonce_.clear();
 
     Message failure;
-    failure.messageType = static_cast<quint32>(MessageType::AuthFailure);
+    failure.messageType = static_cast<quint32>(messageType);
     failure.text = reason;
     sendMessage(failure);
     socket_->disconnectFromHost();
@@ -136,6 +136,10 @@ const QByteArray& Session::clientNonce() const {
 
 const QByteArray& Session::serverNonce() const {
     return serverNonce_;
+}
+
+QString Session::peerAddress() const {
+    return socket_->peerAddress().toString();
 }
 
 void Session::readAvailable() {

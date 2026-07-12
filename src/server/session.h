@@ -32,7 +32,9 @@ class Session final : public QObject {
                              const QByteArray& clientNonce,
                              const QByteArray& serverNonce);
     void completeAuthentication();
-    void rejectAuthentication(const QString& reason = QStringLiteral("Authentication failed."));
+    void rejectAuthentication(
+        const QString& reason = QStringLiteral("Authentication failed."),
+        messenger::protocol::MessageType messageType = messenger::protocol::MessageType::AuthFailure);
     void disconnectFromHost();
 
     [[nodiscard]] AuthenticationState authenticationState() const;
@@ -44,6 +46,7 @@ class Session final : public QObject {
     [[nodiscard]] const QByteArray& authenticationId() const;
     [[nodiscard]] const QByteArray& clientNonce() const;
     [[nodiscard]] const QByteArray& serverNonce() const;
+    [[nodiscard]] QString peerAddress() const;
 
    signals:
     void messageReceived(const messenger::protocol::Message& message, Session* session);

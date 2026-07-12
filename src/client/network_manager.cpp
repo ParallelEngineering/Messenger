@@ -227,6 +227,12 @@ void NetworkManager::readAvailable() {
                 failAuthentication(message.text.isEmpty()
                                        ? tr("Authentication failed.")
                                        : message.text);
+            } else if (messageType == MessageType::RegistrationPending) {
+                failAuthentication(tr(
+                    "You do not have access yet. A registration request was created and must "
+                    "be approved on the server. Please try again afterwards."));
+            } else if (messageType == MessageType::RegistrationRejected) {
+                failAuthentication(tr("Your registration request was rejected on the server."));
             } else {
                 failAuthentication(tr("Server sent an unexpected message during authentication."));
             }
@@ -287,6 +293,7 @@ void NetworkManager::sendAuthenticationHello() {
     hello.messageType = static_cast<quint32>(MessageType::AuthHello);
     hello.senderName = authenticationUserName_;
     hello.clientNonce = clientNonce_;
+    hello.publicKey = toByteArray(authenticationKeyPair_->getPublicKey().serialize());
 
     QDataStream out(&socket_);
     out.setVersion(DataStreamVersion);

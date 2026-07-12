@@ -5,7 +5,7 @@ Messenger is a simple chat program with a client and a server. Users can connect
 ## Functionality
 
 - **Client connection:** enter a server host, connect to the server, disconnect again when terminating the program, and see the current connection status in the UI.
-- **Group chat authentication:** each server represents one group chat; user accounts are created on the server with a name and a public key, without passwords. Clients authenticate through RSA-based verification using the public key stored for their account.
+- **Group chat authentication:** each server represents one group chat; clients request access with a name and their public key, without passwords. After server-side approval, they authenticate through RSA-based verification using the stored public key.
 - **Message sending:** compose text messages and send them to the connected server.
 - **Message receiving:** display incoming messages in the client window as they arrive from the server with timestamp and username.
 - **Group chat forwarding:** the server keeps track of the clients connected to its group chat and broadcasts chat messages to every active session.
@@ -69,3 +69,17 @@ cmake --build cmake-build-debug
 ```
 
 This creates the `Messenger-Client` and `Messenger-Server` targets.
+
+## User registration
+
+When a client connects with an unknown username, the server stores a pending registration request and the client is told to try again after an administrator has reviewed it. The private key always remains on the client.
+
+Use the server executable from a terminal to review requests in the same database:
+
+```bash
+Messenger-Server requests
+Messenger-Server approve 1
+Messenger-Server reject 2
+```
+
+After approval, the client connects again manually and uses the normal RSA authentication flow. No administrator account or manually installed public-key file is required.

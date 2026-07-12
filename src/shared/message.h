@@ -9,7 +9,7 @@
 
 namespace messenger::protocol {
 
-inline constexpr quint32 CurrentProtocolVersion = 2;
+inline constexpr quint32 CurrentProtocolVersion = 3;
 inline constexpr quint16 DefaultPort = 4242;
 inline constexpr qint64 ReadBufferSize = 1024 * 1024;
 inline constexpr auto DataStreamVersion = QDataStream::Qt_6_5;
@@ -25,6 +25,8 @@ enum class MessageType : quint32 {
     AuthProof = 3,
     AuthSuccess = 4,
     AuthFailure = 5,
+    RegistrationPending = 6,
+    RegistrationRejected = 7,
     ChatMessage = 100,
     SystemMessage = 101,
     ErrorMessage = 102,
@@ -40,6 +42,7 @@ struct Message {
     QByteArray clientNonce;
     QByteArray serverNonce;
     QByteArray signature;
+    QByteArray publicKey;
 };
 
 QDataStream& operator<<(QDataStream& out, const Message& message);

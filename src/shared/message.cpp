@@ -15,6 +15,7 @@ QDataStream& operator<<(QDataStream& out, const Message& message) {
     out << message.clientNonce;
     out << message.serverNonce;
     out << message.signature;
+    out << message.publicKey;
 
     return out;
 }
@@ -29,6 +30,7 @@ QDataStream& operator>>(QDataStream& in, Message& message) {
     in >> message.clientNonce;
     in >> message.serverNonce;
     in >> message.signature;
+    in >> message.publicKey;
 
     return in;
 }

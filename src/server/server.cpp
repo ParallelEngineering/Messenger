@@ -135,8 +135,37 @@ void server::handleMessageReceived(const Message& message, Session* session) {
 
         const auto user = messageStore_.findUserForAuthentication(requestedUserName);
         if (!user) {
-            qWarning() << "Authentication requested for unknown user:" << requestedUserName;
-            session->rejectAuthentication();
+            if (!deserializePublicKey(message.publicKey)) {
+                qWarning() << "Registration requested with an invalid public key for"
+                           << requestedUserName;
+                session->rejectAuthentication(QStringLiteral("The public key is invalid."));
+                return;
+            }
+
+            const auto request = messageStore_.requestRegistration(
+                requestedUserName, message.publicKey, session->peerAddress());
+            switch (request.status) {
+                case RegistrationRequestResult::Status::Created:
+                    qInfo().noquote()
+                        << QStringLiteral("New registration request %1 for \"%2\" from %3. "
+                                          "Run 'Messenger-Server requests' to review it.")
+                               .arg(request.requestId)
+                               .arg(requestedUserName, session->peerAddress());
+                    [[fallthrough]];
+                case RegistrationRequestResult::Status::Pending:
+                    session->rejectAuthentication(
+                        QStringLiteral("Access is pending server approval."),
+                        MessageType::RegistrationPending);
+                    break;
+                case RegistrationRequestResult::Status::Rejected:
+                    session->rejectAuthentication(
+                        QStringLiteral("The registration request was rejected."),
+                        MessageType::RegistrationRejected);
+                    break;
+                case RegistrationRequestResult::Status::Failed:
+                    session->rejectAuthentication();
+                    break;
+            }
             return;
         }
 
@@ -230,6 +259,7 @@ void server::handleMessageReceived(const Message& message, Session* session) {
     verifiedMessage.clientNonce.clear();
     verifiedMessage.serverNonce.clear();
     verifiedMessage.signature.clear();
+    verifiedMessage.publicKey.clear();
 
     qInfo() << "Message from" << verifiedMessage.senderName << ":" << verifiedMessage.text;
 
@@ -250,10 +280,80 @@ void server::handleSessionDisconnected(Session* session) {
     session->deleteLater();
 }
 
+namespace {
+
+void printServerUsage(const QString& executable) {
+    qInfo().noquote()
+        << QStringLiteral(
+               "Usage:\n"
+               "  %1                 Start the server\n"
+               "  %1 requests        List pending registration requests\n"
+               "  %1 approve <id>     Approve a registration request\n"
+               "  %1 reject <id>      Reject a registration request")
+               .arg(executable);
+}
+
+int runAdministrationCommand(const QStringList& arguments) {
+    MessageStore store;
+    if (!store.initialize()) {
+        qCritical() << "Could not initialize message storage";
+        return 1;
+    }
+
+    const auto command = arguments.at(1);
+    if (command == QStringLiteral("requests") && arguments.size() == 2) {
+        const auto requests = store.pendingRegistrationRequests();
+        if (requests.isEmpty()) {
+            qInfo() << "There are no pending registration requests.";
+            return 0;
+        }
+
+        for (const auto& request : requests) {
+            const auto fingerprint = QCryptographicHash::hash(
+                                         request.publicKey, QCryptographicHash::Sha256)
+                                         .toHex(':')
+                                         .toUpper();
+            qInfo().noquote()
+                << QStringLiteral("[%1] %2\n    From: %3\n    Created: %4\n    Key: %5")
+                       .arg(request.requestId)
+                       .arg(request.userName,
+                            request.sourceAddress,
+                            request.createdAt,
+                            QString::fromLatin1(fingerprint));
+        }
+        return 0;
+    }
+
+    if ((command == QStringLiteral("approve") || command == QStringLiteral("reject"))
+        && arguments.size() == 3) {
+        bool validId = false;
+        const auto requestId = arguments.at(2).toLongLong(&validId);
+        if (!validId || requestId <= 0) {
+            qCritical() << "The request ID must be a positive number.";
+            return 2;
+        }
+
+        const auto success = command == QStringLiteral("approve")
+                                 ? store.approveRegistrationRequest(requestId)
+                                 : store.rejectRegistrationRequest(requestId);
+        return success ? 0 : 1;
+    }
+
+    printServerUsage(arguments.first());
+    return 2;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Messenger"));
     QCoreApplication::setOrganizationName(QStringLiteral("ParallelEngineering"));
+
+    const auto arguments = QCoreApplication::arguments();
+    if (arguments.size() > 1) {
+        return runAdministrationCommand(arguments);
+    }
 
     auto& serverInstance = server::getInstance();
     if (!serverInstance.listen(QHostAddress::Any, DefaultPort)) {

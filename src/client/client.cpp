@@ -22,8 +22,8 @@ int client::run(QGuiApplication& app) {
     QCoreApplication::setOrganizationName(QStringLiteral("ParallelEngineering"));
     QCoreApplication::setApplicationName(QStringLiteral("Messenger"));
 
-    networkManager_ = std::make_unique<NetworkManager>();
     connectionStore_ = std::make_unique<ConnectionStore>();
+    networkManager_ = std::make_unique<NetworkManager>(connectionStore_.get());
     networkManager_->setUserName(connectionStore_->userName());
 
     engine_ = std::make_unique<QQmlApplicationEngine>();
@@ -33,15 +33,15 @@ int client::run(QGuiApplication& app) {
 
     if (engine_->rootObjects().isEmpty()) {
         engine_.reset();
-        connectionStore_.reset();
         networkManager_.reset();
+        connectionStore_.reset();
         return -1;
     }
 
     const auto exitCode = app.exec();
     engine_.reset();
-    connectionStore_.reset();
     networkManager_.reset();
+    connectionStore_.reset();
 
     return exitCode;
 }

@@ -7,6 +7,14 @@
 #include <QList>
 #include <QString>
 
+#include <optional>
+
+struct UserAuthenticationRecord {
+    int userId;
+    QString userName;
+    QByteArray publicKey;
+};
+
 class MessageStore {
    public:
     MessageStore();
@@ -20,6 +28,8 @@ class MessageStore {
     bool initialize();
     void close();
     bool hasUser(const QString& userName) const;
+    [[nodiscard]] std::optional<UserAuthenticationRecord> findUserForAuthentication(
+        const QString& userName) const;
     bool saveMessage(const messenger::protocol::Message& message);
     QList<messenger::protocol::Message> loadMessages() const;
 

@@ -20,6 +20,7 @@
 
 using messenger::protocol::CurrentProtocolVersion;
 using messenger::protocol::Message;
+using messenger::protocol::MessageType;
 
 namespace {
 
@@ -253,7 +254,27 @@ QList<Message> MessageStore::loadMessages() const {
         Message message;
         message.protocolVersion = CurrentProtocolVersion;
         message.senderName = query.value(QStringLiteral("username")).toString();
-        message.messageType = query.value(QStringLiteral("message_type")).toUInt();
+        const auto storedMessageType = query.value(QStringLiteral("message_type")).toUInt();
+        switch (storedMessageType) {
+            case 1: // Protocol version 1 ChatMessage
+                message.messageType = static_cast<quint32>(MessageType::ChatMessage);
+                break;
+            case 2: // Protocol version 1 SystemMessage
+                message.messageType = static_cast<quint32>(MessageType::SystemMessage);
+                break;
+            case 3: // Protocol version 1 ErrorMessage
+                message.messageType = static_cast<quint32>(MessageType::ErrorMessage);
+                break;
+            case static_cast<quint32>(MessageType::ChatMessage):
+            case static_cast<quint32>(MessageType::SystemMessage):
+            case static_cast<quint32>(MessageType::ErrorMessage):
+                message.messageType = storedMessageType;
+                break;
+            default:
+                qWarning() << "Skipping stored message with unsupported type"
+                           << storedMessageType;
+                continue;
+        }
         message.text = query.value(QStringLiteral("body")).toString();
         message.timestamp = QDateTime::fromString(query.value(QStringLiteral("client_timestamp")).toString(),
                                                   Qt::ISODateWithMs);
@@ -268,6 +289,34 @@ QList<Message> MessageStore::loadMessages() const {
 
 bool MessageStore::hasUser(const QString& userName) const {
     return userIdForUserName(userName) != InvalidUserId;
+}
+
+std::optional<UserAuthenticationRecord> MessageStore::findUserForAuthentication(
+    const QString& userName) const {
+    if (!initialized_) {
+        qWarning() << "Cannot authenticate a user before message store initialization";
+        return std::nullopt;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    query.prepare(QStringLiteral(
+        "SELECT id, username, public_key FROM users WHERE username = :username"));
+    query.bindValue(QStringLiteral(":username"), userName.trimmed());
+
+    if (!query.exec()) {
+        qWarning() << "Could not load user authentication data:" << lastErrorText(query);
+        return std::nullopt;
+    }
+
+    if (!query.next()) {
+        return std::nullopt;
+    }
+
+    return UserAuthenticationRecord{
+        query.value(QStringLiteral("id")).toInt(),
+        query.value(QStringLiteral("username")).toString(),
+        query.value(QStringLiteral("public_key")).toByteArray(),
+    };
 }
 
 int MessageStore::userIdForUserName(const QString& userName) const {

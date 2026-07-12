@@ -521,6 +521,21 @@ bool MessageStore::deleteUser(qint64 userId) const {
     return true;
 }
 
+bool MessageStore::clearMessages() const {
+    if (!initialized_) {
+        return false;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(connectionName_));
+    if (!query.exec(QStringLiteral("DELETE FROM messages"))) {
+        qWarning() << "Could not clear chat history:" << lastErrorText(query);
+        return false;
+    }
+
+    qInfo() << "Cleared chat history; deleted" << query.numRowsAffected() << "messages";
+    return true;
+}
+
 int MessageStore::userIdForUserName(const QString& userName) const {
     if (!initialized_) {
         qWarning() << "Cannot look up user before message store initialization";

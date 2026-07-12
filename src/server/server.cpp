@@ -304,7 +304,8 @@ void printServerUsage(const QString& executable) {
                "  %1 approve <id>     Approve a registration request\n"
                "  %1 reject <id>      Reject a registration request\n"
                "  %1 users           List all users\n"
-               "  %1 delete-user <id> Delete a user and all associated data")
+               "  %1 delete-user <id> Delete a user and all associated data\n"
+               "  %1 clear-history   Delete all stored chat messages")
                .arg(executable);
 }
 
@@ -378,6 +379,10 @@ int runAdministrationCommand(const QStringList& arguments) {
             return 2;
         }
         return store.deleteUser(userId) ? 0 : 1;
+    }
+
+    if (command == QStringLiteral("clear-history") && arguments.size() == 2) {
+        return store.clearMessages() ? 0 : 1;
     }
 
     printServerUsage(arguments.first());

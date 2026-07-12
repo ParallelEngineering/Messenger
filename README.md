@@ -90,3 +90,9 @@ Existing users can be listed and completely removed by ID. Deletion also removes
 Messenger-Server users
 Messenger-Server delete-user 1
 ```
+
+The complete stored chat history can be deleted without changing users or registration requests:
+
+```bash
+Messenger-Server clear-history
+```

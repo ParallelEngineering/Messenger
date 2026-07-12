@@ -65,6 +65,7 @@ class MessageStore {
     bool rejectRegistrationRequest(qint64 requestId) const;
     [[nodiscard]] QList<StoredUser> users() const;
     bool deleteUser(qint64 userId) const;
+    bool clearMessages() const;
     bool saveMessage(const messenger::protocol::Message& message);
     QList<messenger::protocol::Message> loadMessages() const;
 

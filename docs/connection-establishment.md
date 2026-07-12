@@ -154,6 +154,8 @@ If the username does not exist, the server validates the public key from `AuthHe
 
 The administrator can list accounts with `Messenger-Server users` and remove an account with `Messenger-Server delete-user <id>`. Deletion removes the user, their stored messages, and all registration requests for that username in one transaction.
 
+The command `Messenger-Server clear-history` deletes all stored chat messages without changing users or registration requests.
+
 For a known user and `AuthProof`, the server reconstructs the transcript, calculates its SHA-256 digest, and verifies the signature with the stored public key. On success, it binds the user ID and username to the session, sends `AuthSuccess`, and then sends the chat history. On failure, it sends `AuthFailure` and closes the connection.
 
 Only authenticated sessions may send or receive chat messages. The server sets the sender name and timestamp itself:
